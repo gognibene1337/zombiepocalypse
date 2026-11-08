@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0f0a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Snake Plissken's Escape</title>
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+            /* Kill browser gestures: no scroll, zoom, pull-to-refresh, text select, tap flash */
+            touch-action: none;
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #game {
+            display: block;
+            background: #0b0f0a;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="game"></canvas>
+
+    <!-- Plain scripts (no modules) so the game also runs from file:// -->
+    <script src="js/engine.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/art.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/states.js"></script>
+    <script src="js/states/menu.js"></script>
+    <script src="js/states/maze.js"></script>
+    <script src="js/states/rhythm.js"></script>
+    <script src="js/states/result.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
