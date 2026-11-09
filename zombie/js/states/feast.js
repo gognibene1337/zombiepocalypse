@@ -283,7 +283,7 @@ G.States.register('feast', {
     finish: function () {
         this.phase = 'done';
         this.doneT = 0;
-        // 80%+ unlocks the Cat Pump bonus round
+        // 7/10+ (G.BONUS.CAT_FROM_FEAST) unlocks the Cat Pump bonus round
         this.bonus = this.score / this.N >= G.BONUS.CAT_FROM_FEAST;
         this.unlocked = this.bonus;
         this.autoT = this.bonus ? G.BONUS.AUTO_START : 0;
@@ -477,7 +477,7 @@ G.States.register('feast', {
                 U.textShadow(ctx, 'CAT PUMP UNLOCKED!', cx, G.H * 0.565, 17, C.accent);
                 if (this.bonus) U.text(ctx, 'Starting in ' + Math.max(1, Math.ceil(this.autoT)) + '...', cx, G.H * 0.595, 12, '#f3d9b0', 'center', false);
             } else {
-                U.text(ctx, 'Score 8+ to unlock the Cat Pump bonus', cx, G.H * 0.575, 12, '#f3d9b0', 'center', false);
+                U.text(ctx, 'Score ' + Math.ceil(G.BONUS.CAT_FROM_FEAST * this.N) + '+ to unlock the Cat Pump bonus', cx, G.H * 0.575, 12, '#f3d9b0', 'center', false);
             }
             U.drawButtons(ctx, this.buttons, this.nav);
         }

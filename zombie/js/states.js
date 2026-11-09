@@ -135,14 +135,14 @@ G.States = (function () {
 
 /*
  * Bonus round chain:
- *   Dance-off accuracy >= 70%  ->  Feast Fling
- *   Feast Fling score  >= 80%  ->  Cat Pump
+ *   Dance-off accuracy >= 60%  ->  Feast Fling
+ *   Feast Fling score  >= 7/10 ->  Cat Pump
  * The unlock screen counts down, then starts the bonus game on its own
  * (or tap the button to go right away).
  */
 G.BONUS = {
-    FEAST_FROM_DANCE: 0.7,
-    CAT_FROM_FEAST: 0.8,
+    FEAST_FROM_DANCE: 0.6,   // same as the pass mark: every passed dance-off earns the bonus
+    CAT_FROM_FEAST: 0.7,     // 7 of 10 foods in the right basket
     AUTO_START: 4          // seconds before the bonus game starts by itself
 };
 

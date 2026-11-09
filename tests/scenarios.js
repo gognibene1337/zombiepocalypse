@@ -347,7 +347,7 @@ module.exports = [
         }
     },
     {
-        // Dance-off 70%+ -> Feast Fling starts by itself -> 80%+ -> Cat Pump starts by itself
+        // Dance-off 60%+ -> Feast Fling starts by itself -> 80%+ -> Cat Pump starts by itself
         name: 'bonus-chain-dance-feast-cat',
         async run(h, assert) {
             await startRhythm(h, 8);
@@ -355,7 +355,7 @@ module.exports = [
             await h.waitState('result', 20000);
             const r = await h.ev(() => ({ bonus: G.States.current.bonus, acc: G.States.current.rhythm.acc,
                 label: G.States.current.buttons[0].label }));
-            assert(r.bonus && r.acc >= 0.7, 'dance-off 70%+ unlocks the bonus (acc ' + r.acc + ')');
+            assert(r.bonus && r.acc >= 0.6, 'dance-off 60%+ unlocks the bonus (acc ' + r.acc + ')');
             assert(r.label === 'FEAST FLING ▶', 'result offers Feast Fling');
             await sleep(1200);
             await h.shot('60-bonus-unlocked');
@@ -377,26 +377,33 @@ module.exports = [
     {
         name: 'bonus-chain-thresholds',
         async run(h, assert) {
-            // Passed the dance-off at 65%: escaped, but no bonus
-            await h.ev(() => G.States.go('result', { win: true, reason: 'rhythm',
-                rhythm: { perfect: 5, great: 2, miss: 3, saved: 0, acc: 0.65, maxCombo: 4, total: 10 } }));
+            // Failed the dance-off at 55%: retry, no bonus
+            await h.ev(() => G.States.go('result', { win: false, reason: 'rhythm',
+                rhythm: { perfect: 4, great: 2, miss: 4, saved: 0, acc: 0.52, maxCombo: 3, total: 10 } }));
             await h.waitState('result');
             let r = await h.ev(() => ({ bonus: G.States.current.bonus, label: G.States.current.buttons[0].label }));
-            assert(!r.bonus && r.label === 'PLAY AGAIN', '65% passes without a bonus');
-            // Exactly 70% unlocks
+            assert(!r.bonus && r.label === 'RETRY DANCE-OFF', 'a failed dance-off gives no bonus');
+            // Exactly 60% (the pass mark) unlocks
             await h.ev(() => G.States.go('result', { win: true, reason: 'rhythm',
-                rhythm: { perfect: 7, great: 0, miss: 3, saved: 0, acc: 0.7, maxCombo: 7, total: 10 } }));
-            await h.page.waitForFunction(() => G.States.current.rhythm && G.States.current.rhythm.acc === 0.7 && !G.States.busy(), { timeout: 3000 });
-            assert(await h.ev(() => G.States.current.bonus), 'exactly 70% unlocks the bonus');
+                rhythm: { perfect: 6, great: 0, miss: 4, saved: 0, acc: 0.6, maxCombo: 6, total: 10 } }));
+            await h.page.waitForFunction(() => G.States.current.rhythm && G.States.current.rhythm.acc === 0.6 && !G.States.busy(), { timeout: 3000 });
+            assert(await h.ev(() => G.States.current.bonus), 'exactly 60% unlocks the bonus');
             // Tapping the button skips the countdown
             await h.tapButton('FEAST FLING ▶');
             await h.waitState('feast', 3000);
-            // Feast Fling 7/10: no Cat Pump
-            await h.ev(() => { const s = G.States.current; s.score = 7; s.idx = 9; s.next(); });
+            // Feast Fling 6/10: no Cat Pump
+            await h.ev(() => { const s = G.States.current; s.score = 6; s.idx = 9; s.next(); });
             r = await h.ev(() => ({ bonus: G.States.current.bonus, label: G.States.current.buttons[0].label }));
-            assert(!r.bonus && r.label === 'PLAY AGAIN', '7/10 does not unlock Cat Pump');
+            assert(!r.bonus && r.label === 'PLAY AGAIN', '6/10 does not unlock Cat Pump');
             await sleep(4500);
             assert(await h.ev(() => G.States.name) === 'feast', 'no auto-start without the unlock');
+            // Feast Fling exactly 7/10: Cat Pump
+            await h.tapButton('PLAY AGAIN');
+            await h.waitState('feast', 3000);
+            await h.ev(() => { const s = G.States.current; s.score = 7; s.idx = 9; s.next(); });
+            r = await h.ev(() => ({ bonus: G.States.current.bonus, label: G.States.current.buttons[0].label }));
+            assert(r.bonus && r.label === 'CAT PUMP ▶', 'exactly 7/10 unlocks Cat Pump');
+            await h.waitState('cat', 8000);
         }
     },
     {

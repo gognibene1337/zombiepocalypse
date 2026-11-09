@@ -4,7 +4,7 @@
  * params: { win: bool, reason: 'maze' | 'rhythm' }
  *  - Lost the dance-off -> retry the rhythm phase (health/med-kits kept)
  *  - Died in the maze   -> new run
- *  - Won with >= 70% dance accuracy -> Feast Fling bonus round (auto-starts)
+ *  - Won with >= 60% dance accuracy -> Feast Fling bonus round (auto-starts)
  */
 G.States.register('result', {
     nav: { focus: 0 },
@@ -72,7 +72,7 @@ G.States.register('result', {
             if (this.bonus || (this.win && rh.acc >= G.BONUS.FEAST_FROM_DANCE)) {
                 U.text(ctx, 'BONUS ROUND UNLOCKED!', cx, y + 24, 13, C.accent);
             } else {
-                U.text(ctx, this.win ? 'score 70% to unlock a bonus round' : 'need 60% to pass',
+                U.text(ctx, this.win ? 'score ' + Math.round(G.BONUS.FEAST_FROM_DANCE * 100) + '% to unlock a bonus round' : 'need 60% to pass',
                     cx, y + 24, 11, C.dim, 'center', false);
             }
             U.text(ctx, 'Perfect ' + rh.perfect + '   Great ' + rh.great + '   Miss ' + rh.miss, cx, y + 46, 13, C.text, 'center', false);
