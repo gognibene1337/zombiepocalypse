@@ -85,14 +85,11 @@ G.vibrate = function (ms) {
     try { if (navigator.vibrate) navigator.vibrate(ms); } catch (_) { /* ignore */ }
 };
 
-// Persistent player settings (localStorage can be blocked: always try/catch)
+// Player settings. The on-screen d-pad starts ON every time the app starts;
+// the menu toggle only lasts for the current session (not saved).
 G.Settings = (function () {
-    const KEY = 'spe.settings.v1';
-    const s = { dpad: false };
-    try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (_) { /* ignore */ }
-    s.save = function () {
-        try { localStorage.setItem(KEY, JSON.stringify({ dpad: s.dpad })); } catch (_) { /* ignore */ }
-    };
+    const s = { dpad: true };
+    s.save = function () { /* nothing persisted yet */ };
     return s;
 })();
 

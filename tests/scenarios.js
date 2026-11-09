@@ -347,6 +347,59 @@ module.exports = [
         }
     },
     {
+        // Dance-off 70%+ -> Feast Fling starts by itself -> 80%+ -> Cat Pump starts by itself
+        name: 'bonus-chain-dance-feast-cat',
+        async run(h, assert) {
+            await startRhythm(h, 8);
+            await autoplay(h, 0);
+            await h.waitState('result', 20000);
+            const r = await h.ev(() => ({ bonus: G.States.current.bonus, acc: G.States.current.rhythm.acc,
+                label: G.States.current.buttons[0].label }));
+            assert(r.bonus && r.acc >= 0.7, 'dance-off 70%+ unlocks the bonus (acc ' + r.acc + ')');
+            assert(r.label === 'FEAST FLING ▶', 'result offers Feast Fling');
+            await sleep(1200);
+            await h.shot('60-bonus-unlocked');
+            await h.waitState('feast', 8000);                            // no tap: auto-start
+
+            // Finish Feast Fling with 8/10
+            await h.ev(() => {
+                const s = G.States.current;
+                s.score = 8; s.idx = 9; s.results = ['yum','yum','yum','yum','yum','yum','yum','yum','miss','wrong'];
+                s.next();
+            });
+            const f = await h.ev(() => ({ bonus: G.States.current.bonus, label: G.States.current.buttons[0].label }));
+            assert(f.bonus && f.label === 'CAT PUMP ▶', 'Feast Fling 8/10 unlocks Cat Pump');
+            await sleep(1200);
+            await h.shot('61-cat-unlocked');
+            await h.waitState('cat', 8000);                              // no tap: auto-start
+        }
+    },
+    {
+        name: 'bonus-chain-thresholds',
+        async run(h, assert) {
+            // Passed the dance-off at 65%: escaped, but no bonus
+            await h.ev(() => G.States.go('result', { win: true, reason: 'rhythm',
+                rhythm: { perfect: 5, great: 2, miss: 3, saved: 0, acc: 0.65, maxCombo: 4, total: 10 } }));
+            await h.waitState('result');
+            let r = await h.ev(() => ({ bonus: G.States.current.bonus, label: G.States.current.buttons[0].label }));
+            assert(!r.bonus && r.label === 'PLAY AGAIN', '65% passes without a bonus');
+            // Exactly 70% unlocks
+            await h.ev(() => G.States.go('result', { win: true, reason: 'rhythm',
+                rhythm: { perfect: 7, great: 0, miss: 3, saved: 0, acc: 0.7, maxCombo: 7, total: 10 } }));
+            await h.page.waitForFunction(() => G.States.current.rhythm && G.States.current.rhythm.acc === 0.7 && !G.States.busy(), { timeout: 3000 });
+            assert(await h.ev(() => G.States.current.bonus), 'exactly 70% unlocks the bonus');
+            // Tapping the button skips the countdown
+            await h.tapButton('FEAST FLING ▶');
+            await h.waitState('feast', 3000);
+            // Feast Fling 7/10: no Cat Pump
+            await h.ev(() => { const s = G.States.current; s.score = 7; s.idx = 9; s.next(); });
+            r = await h.ev(() => ({ bonus: G.States.current.bonus, label: G.States.current.buttons[0].label }));
+            assert(!r.bonus && r.label === 'PLAY AGAIN', '7/10 does not unlock Cat Pump');
+            await sleep(4500);
+            assert(await h.ev(() => G.States.name) === 'feast', 'no auto-start without the unlock');
+        }
+    },
+    {
         name: 'maze-generation',
         async run(h, assert) {
             await startMaze(h);
@@ -403,8 +456,11 @@ module.exports = [
     {
         name: 'maze-dpad',
         async run(h, assert) {
+            assert(await h.ev(() => G.Settings.dpad) === true, 'd-pad is ON when the app starts');
+            await h.tapButton('D-PAD: ON');
+            assert(await h.ev(() => G.Settings.dpad) === false, 'menu button turns it off');
             await h.tapButton('D-PAD: OFF');
-            assert(await h.ev(() => G.Settings.dpad) === true, 'd-pad setting toggled on');
+            assert(await h.ev(() => G.Settings.dpad) === true, 'and back on');
             await startMaze(h, { noZombies: true });
             const dir = await openDir(h);
             const pos = await h.ev(d => {
@@ -421,7 +477,6 @@ module.exports = [
             const b = await player(h);
             assert(a.x !== b.x || a.y !== b.y, 'd-pad ' + dir + ' moved Snake');
             assert(!b.moving, 'stops after releasing d-pad');
-            await h.ev(() => { G.Settings.dpad = false; G.Settings.save(); });
         }
     },
     {
@@ -429,10 +484,22 @@ module.exports = [
         async run(h, assert) {
             await startMaze(h, { noZombies: true });
             const k = await h.ev(() => G.States.current.kits[0]);
+            await h.ev(() => { G.Run.health = 50; });
             await tp(h, k.c, k.r);
             await sleep(150);
-            assert(await h.ev(() => G.Run.medkits) === 1, 'picked up a med-kit');
+            let r0 = await h.ev(() => ({ hp: G.Run.health, kits: G.Run.medkits }));
+            assert(r0.kits === 1, 'picked up a med-kit');
+            assert(r0.hp === 70, 'pickup restores 20% health instantly (50 -> ' + r0.hp + ')');
             await h.shot('12-maze-pickup');
+
+            // At 90 HP a pickup only tops up to 100 (no overheal)
+            const k2 = await h.ev(() => G.States.current.kits[1]);
+            await h.ev(() => { G.Run.health = 90; });
+            await tp(h, k2.c, k2.r);
+            await sleep(150);
+            r0 = await h.ev(() => ({ hp: G.Run.health, kits: G.Run.medkits }));
+            assert(r0.hp === 100 && r0.kits === 2, 'pickup heal caps at max health (hp ' + r0.hp + ')');
+            await h.ev(() => { G.Run.medkits = 1; });
             await h.ev(() => { G.Run.health = 50; });
             await h.key('KeyH');
             await sleep(100);

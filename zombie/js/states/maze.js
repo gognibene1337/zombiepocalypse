@@ -317,8 +317,8 @@ G.States.register('maze', {
             const kx = k.c * T + T / 2, ky = k.r * T + T / 2;
             if (Math.abs(p.x - kx) < 12 && Math.abs(p.y - ky) < 12) {
                 k.taken = true;
-                G.Run.addMedkit();
-                this.fx.push({ text: '+1 MED-KIT', x: kx, y: ky, t: 1 });
+                const healed = G.Run.addMedkit();
+                this.fx.push({ text: healed > 0 ? '+' + healed + ' HP  +1 KIT' : '+1 MED-KIT', x: kx, y: ky, t: 1.2 });
             }
         }
 

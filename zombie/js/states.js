@@ -134,11 +134,25 @@ G.States = (function () {
 })();
 
 /*
+ * Bonus round chain:
+ *   Dance-off accuracy >= 70%  ->  Feast Fling
+ *   Feast Fling score  >= 80%  ->  Cat Pump
+ * The unlock screen counts down, then starts the bonus game on its own
+ * (or tap the button to go right away).
+ */
+G.BONUS = {
+    FEAST_FROM_DANCE: 0.7,
+    CAT_FROM_FEAST: 0.8,
+    AUTO_START: 4          // seconds before the bonus game starts by itself
+};
+
+/*
  * Data that carries across phases for one playthrough.
  * Health and med-kits collected in the maze carry into the dance-off.
  */
 G.Run = {
-    HEAL_AMOUNT: 35,
+    HEAL_AMOUNT: 35,          // using a carried med-kit
+    PICKUP_HEAL: 0.2,         // instant heal when collecting one (share of max health)
 
     reset: function () {
         // Each run gets a fresh maze; ?seed=N in the URL pins it (testing)
@@ -157,9 +171,15 @@ G.Run = {
         return this.health <= 0;
     },
 
+    // Collecting a med-kit: heal 20% straight away AND keep the kit
+    // (it still carries over to the dance-off / can be used later).
+    // Returns the HP actually restored.
     addMedkit: function () {
         this.medkits++;
+        const before = this.health;
+        this.health = Math.min(this.maxHealth, this.health + this.maxHealth * this.PICKUP_HEAL);
         G.Audio.sfx('pickup');
+        return Math.round(this.health - before);
     },
 
     useMedkit: function () {

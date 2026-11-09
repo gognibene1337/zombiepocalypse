@@ -62,6 +62,9 @@ G.States.register('feast', {
         this.newHigh = false;
         this.musicOn = false;
         this.doneT = 0;
+        this.bonus = false;            // Cat Pump countdown running
+        this.unlocked = false;         // scored 80%+ this round
+        this.autoT = 0;
         this.buttons = [];
         this.baskets = null;
         this.nav.focus = 0;
@@ -92,9 +95,11 @@ G.States.register('feast', {
     },
 
     makeButtons: function () {
-        const bw = 220, bh = 50, x = (G.W - bw) / 2, y = Math.round(G.H * 0.62);
+        const bw = 220, bh = 50, x = (G.W - bw) / 2, y = Math.round(G.H * 0.62), self = this;
         this.buttons = [
-            G.UI.button('PLAY AGAIN', x, y, bw, bh, function () { G.States.go('feast'); }, 'xmas'),
+            this.bonus
+                ? G.UI.button('CAT PUMP ▶', x, y, bw, bh, function () { self.startBonus(); }, 'xmas')
+                : G.UI.button('PLAY AGAIN', x, y, bw, bh, function () { G.States.go('feast'); }, 'xmas'),
             G.UI.button('MAIN MENU', x, y + bh + 12, bw, 44, function () { G.States.go('menu'); }, 'secondary')
         ];
     },
@@ -263,6 +268,12 @@ G.States.register('feast', {
         this.resultT = 1.1;
     },
 
+    startBonus: function () {
+        this.autoT = 0;
+        this.bonus = false;          // only once
+        G.States.go('cat');
+    },
+
     next: function () {
         this.idx++;
         if (this.idx >= this.N) { this.finish(); return; }
@@ -272,6 +283,10 @@ G.States.register('feast', {
     finish: function () {
         this.phase = 'done';
         this.doneT = 0;
+        // 80%+ unlocks the Cat Pump bonus round
+        this.bonus = this.score / this.N >= G.BONUS.CAT_FROM_FEAST;
+        this.unlocked = this.bonus;
+        this.autoT = this.bonus ? G.BONUS.AUTO_START : 0;
         if (this.score > this.high) {
             this.high = this.score;
             this.newHigh = true;
@@ -301,7 +316,11 @@ G.States.register('feast', {
 
         if (this.phase === 'done') {
             this.doneT += dt;
-            if (this.doneT > 0.8) G.UI.handleButtons(this.buttons, this.nav);
+            if (this.doneT > 0.8 && G.UI.handleButtons(this.buttons, this.nav)) return;
+            if (this.bonus) {
+                this.autoT -= dt;
+                if (this.autoT <= 0) this.startBonus();
+            }
             return;
         }
 
@@ -453,6 +472,12 @@ G.States.register('feast', {
                 G.Art.food(ctx, this.seq[i], x, y, 11, 0);
                 ctx.fillStyle = r === 'yum' ? C.good : C.danger;
                 ctx.fillRect(x - 10, y + 15, 20, 4);
+            }
+            if (this.unlocked) {
+                U.textShadow(ctx, 'CAT PUMP UNLOCKED!', cx, G.H * 0.565, 17, C.accent);
+                if (this.bonus) U.text(ctx, 'Starting in ' + Math.max(1, Math.ceil(this.autoT)) + '...', cx, G.H * 0.595, 12, '#f3d9b0', 'center', false);
+            } else {
+                U.text(ctx, 'Score 8+ to unlock the Cat Pump bonus', cx, G.H * 0.575, 12, '#f3d9b0', 'center', false);
             }
             U.drawButtons(ctx, this.buttons, this.nav);
         }
