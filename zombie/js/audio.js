@@ -32,13 +32,51 @@ G.Audio = (function () {
 
     // One short enveloped oscillator note. delay is seconds from now.
     A.tone = function (freq, dur, type, vol, delay) {
+        if (!A.ctx) return;
+        A.toneAt(freq, dur, type, vol, A.ctx.currentTime + (delay || 0));
+    };
+
+    // ---- Music primitives, scheduled at absolute AudioContext time t ----
+    let noiseBuf = null;
+
+    A.kick = function (t, vol) {
         const c = A.ctx;
         if (!c || A.muted) return;
-        const t = c.currentTime + (delay || 0);
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(150, t);
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+        g.gain.setValueAtTime(vol == null ? 0.9 : vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+        o.connect(g); g.connect(master);
+        o.start(t); o.stop(t + 0.18);
+    };
+
+    A.hat = function (t, vol) {
+        const c = A.ctx;
+        if (!c || A.muted) return;
+        if (!noiseBuf) {                       // 50ms of white noise, built once
+            noiseBuf = c.createBuffer(1, Math.floor(c.sampleRate * 0.05), c.sampleRate);
+            const d = noiseBuf.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        }
+        const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+        s.buffer = noiseBuf;
+        f.type = 'highpass';
+        f.frequency.value = 7000;
+        g.gain.setValueAtTime(vol == null ? 0.25 : vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+        s.connect(f); f.connect(g); g.connect(master);
+        s.start(t); s.stop(t + 0.05);
+    };
+
+    A.toneAt = function (freq, dur, type, vol, t) {
+        const c = A.ctx;
+        if (!c || A.muted) return;
         const o = c.createOscillator();
         const g = c.createGain();
         o.type = type || 'square';
-        o.frequency.setValueAtTime(freq, t);
+        o.frequency.setValueAtTime(freq, t);   // t: absolute context time
         g.gain.setValueAtTime(vol == null ? 0.4 : vol, t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         o.connect(g);

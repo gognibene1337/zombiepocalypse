@@ -113,8 +113,26 @@ G.Maze = (function () {
         return m.dist[r * m.cols + c];
     }
 
+    // In-place Fisher-Yates shuffle with a seeded rnd()
+    function shuffle(a, rnd) {
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = (rnd() * (i + 1)) | 0;
+            const t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+        return a;
+    }
+
+    // True if cell is at least minDist (Manhattan) from every item in list
+    function farFrom(cell, list, minDist) {
+        for (let i = 0; i < list.length; i++) {
+            if (Math.abs(list[i].c - cell.c) + Math.abs(list[i].r - cell.r) < minDist) return false;
+        }
+        return true;
+    }
+
     return {
         D4: D4, DIR_NAMES: DIR_NAMES, DIR_VEC: DIR_VEC, OPPOSITE: OPPOSITE,
-        generate: generate, isOpen: isOpen, bfs: bfs, distAt: distAt, wallCount: wallCount
+        generate: generate, isOpen: isOpen, bfs: bfs, distAt: distAt, wallCount: wallCount,
+        shuffle: shuffle, farFrom: farFrom
     };
 })();

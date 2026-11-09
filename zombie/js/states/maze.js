@@ -44,10 +44,10 @@ G.States.register('maze', {
         M.bfs(m, m.start.c, m.start.r);
 
         // Med-kits in dead ends away from the start, spread apart
-        const ends = shuffle(m.deadEnds.filter(function (d) { return m.start.r - d.r > 6; }), rnd);
+        const ends = M.shuffle(m.deadEnds.filter(function (d) { return m.start.r - d.r > 6; }), rnd);
         this.kits = [];
         for (let i = 0; i < ends.length && this.kits.length < this.N_KITS; i++) {
-            if (farFrom(ends[i], this.kits, 8)) this.kits.push({ c: ends[i].c, r: ends[i].r, taken: false });
+            if (M.farFrom(ends[i], this.kits, 8)) this.kits.push({ c: ends[i].c, r: ends[i].r, taken: false });
         }
 
         // Zombies on cells in the upper part of the maze, spread apart
@@ -55,10 +55,10 @@ G.States.register('maze', {
         for (let r = 1; r < this.ROWS - 14; r += 2) {
             for (let c = 1; c < this.COLS - 1; c += 2) cells.push({ c: c, r: r });
         }
-        shuffle(cells, rnd);
+        M.shuffle(cells, rnd);
         this.zombies = [];
         for (let i = 0; i < cells.length && this.zombies.length < this.N_ZOMBIES; i++) {
-            if (!farFrom(cells[i], this.zombies, 6)) continue;
+            if (!M.farFrom(cells[i], this.zombies, 6)) continue;
             const z = this.makeEnt(cells[i].c, cells[i].r, true);
             z.stun = 0;
             z.chasing = false;
@@ -418,19 +418,3 @@ G.States.register('maze', {
         }
     }
 });
-
-// ---- helpers
-function shuffle(a, rnd) {
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = (rnd() * (i + 1)) | 0;
-        const t = a[i]; a[i] = a[j]; a[j] = t;
-    }
-    return a;
-}
-
-function farFrom(cell, list, minDist) {
-    for (let i = 0; i < list.length; i++) {
-        if (Math.abs(list[i].c - cell.c) + Math.abs(list[i].r - cell.r) < minDist) return false;
-    }
-    return true;
-}

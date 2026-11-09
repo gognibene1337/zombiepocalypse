@@ -38,7 +38,9 @@ window.G = {
 };
 
 G.canvas = document.getElementById('game');
-G.ctx = G.canvas.getContext('2d', { alpha: false });
+// alpha:false skips page compositing work; desynchronized lowers touch-to-screen
+// latency on Android Chrome (helps rhythm feel). Both are safe hints.
+G.ctx = G.canvas.getContext('2d', { alpha: false, desynchronized: true });
 
 G.resize = function () {
     const vw = window.innerWidth;

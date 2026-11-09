@@ -34,6 +34,42 @@ const openDir = h => h.ev(() => {
 
 const KEY = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
 
+// Enter the dance-off with a shortened chart. setup(G) runs first in the page.
+async function startRhythm(h, notes, setup) {
+    await startMaze(h, { noZombies: true });
+    await h.ev((n, setupSrc) => {
+        G.States.list.rhythm.TEST_NOTES = n;
+        if (setupSrc) (new Function('G', setupSrc))(G);
+        G.States.go('rhythm');
+    }, notes, setup || '');
+    await h.waitState('rhythm');
+}
+
+// In-page autoplayer: dispatch key presses at each note's time (+offsetMs).
+// wrong=true presses the opposite direction.
+function autoplay(h, offsetMs, wrong) {
+    return h.ev((offsetMs, wrong) => {
+        const s = G.States.current;
+        const CODES = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown' };
+        const OPP = { left: 'right', right: 'left', up: 'down', down: 'up' };
+        window.__lateness = [];
+        s.notes.forEach(n => {
+            const delay = (n.t - s.now()) * 1000 + offsetMs;
+            setTimeout(() => {
+                window.__lateness.push(Math.round((s.now() - n.t) * 1000));
+                const code = CODES[wrong ? OPP[n.dir] : n.dir];
+                window.dispatchEvent(new KeyboardEvent('keydown', { code }));
+                window.dispatchEvent(new KeyboardEvent('keyup', { code }));
+            }, delay);
+        });
+    }, offsetMs, !!wrong);
+}
+
+const resultInfo = h => h.ev(() => {
+    const s = G.States.current;
+    return { win: s.win, reason: s.reason, rhythm: s.rhythm, kits: G.Run.medkits, attempts: G.Run.rhythmAttempts };
+});
+
 module.exports = [
     {
         name: 'flow-menu-to-result',
@@ -219,6 +255,112 @@ module.exports = [
             await h.shot('14-maze-gate');
             await h.key('ArrowUp', 300);
             await h.waitState('rhythm');
+        }
+    },
+    {
+        name: 'rhythm-autoplay-passes',
+        async run(h, assert) {
+            await startRhythm(h, 12);
+            const clock = await h.ev(() => ({ audio: G.States.current.useAudio, lat: G.States.current.lat }));
+            h.note('audio clock: ' + clock.audio + ', output latency ' + Math.round(clock.lat * 1000) + 'ms');
+            await autoplay(h, 0);
+            await sleep(3200);
+            await h.shot('20-rhythm-play');
+            await h.waitState('result', 20000);
+            const r = await resultInfo(h);
+            const late = await h.ev(() => window.__lateness);
+            h.note('timer lateness (ms): ' + late.join(' '));
+            h.note('result: ' + JSON.stringify(r.rhythm));
+            await h.shot('21-rhythm-win');
+            assert(r.win === true, 'perfect autoplay passes');
+            assert(r.rhythm.perfect + r.rhythm.great === 12, 'all 12 notes hit');
+        }
+    },
+    {
+        name: 'rhythm-idle-fails-and-retry',
+        async run(h, assert) {
+            await startRhythm(h, 6);
+            await h.waitState('result', 20000);
+            const r = await resultInfo(h);
+            await h.shot('22-rhythm-fail');
+            assert(r.win === false && r.reason === 'rhythm', 'no input fails the dance-off');
+            assert(r.rhythm.miss === 6, 'all 6 notes missed (got ' + r.rhythm.miss + ')');
+            await h.tapButton('RETRY DANCE-OFF');
+            await h.waitState('rhythm');
+            assert(await h.ev(() => G.Run.rhythmAttempts) === 2, 'retry counts as attempt 2');
+        }
+    },
+    {
+        name: 'rhythm-wrong-direction-misses',
+        async run(h, assert) {
+            await startRhythm(h, 6);
+            await autoplay(h, 0, true);
+            await h.waitState('result', 20000);
+            const r = await resultInfo(h);
+            assert(r.rhythm.miss === 6 && !r.win, 'wrong-way swipes are misses');
+        }
+    },
+    {
+        name: 'rhythm-medkits-forgive-misses',
+        async run(h, assert) {
+            await startRhythm(h, 4, 'G.Run.medkits = 2;');
+            await h.waitState('result', 20000);
+            const r = await resultInfo(h);
+            assert(r.rhythm.saved === 2 && r.rhythm.miss === 2, 'two misses saved by med-kits');
+            assert(r.kits === 0, 'med-kits consumed');
+        }
+    },
+    {
+        name: 'rhythm-adaptive-tempo',
+        async run(h, assert) {
+            await startRhythm(h, 0, 'G.Run.health = 40;');
+            const r = await h.ev(() => {
+                const s = G.States.current;
+                return { mul: s.tempoMul, spb: s.beats[0].spb };
+            });
+            h.note('health 40 -> tempo x' + r.mul.toFixed(2) + ', beat ' + Math.round(r.spb * 1000) + 'ms');
+            assert(Math.abs(r.mul - 1.15) < 0.001, 'tempo +15% at 40 health');
+            assert(r.spb < 0.6, 'beats shorter than the 100bpm baseline');
+        }
+    },
+    {
+        name: 'rhythm-swipe-input',
+        async run(h, assert) {
+            await startRhythm(h, 4);
+            // Wait until the first note is ~20ms away, then swipe it
+            const n0 = await h.ev(() => { const s = G.States.current; return { dir: s.notes[0].dir, wait: (s.notes[0].t - s.now()) * 1000 }; });
+            await sleep(Math.max(0, n0.wait - 60));
+            await h.swipe(n0.dir, 180, 600);
+            await sleep(200);
+            const res = await h.ev(() => G.States.current.notes[0].result);
+            h.note('first note via touch swipe: ' + res);
+            assert(res === 'perfect' || res === 'great', 'touch swipe hit the note (got ' + res + ')');
+        }
+    },
+    {
+        name: 'full-run-maze-to-escape',
+        async run(h, assert) {
+            await startMaze(h, { noZombies: true });
+            const ex = await h.ev(() => G.States.current.m.exit);
+            await tp(h, ex.c, 1);
+            await h.ev(() => { G.States.list.rhythm.TEST_NOTES = 8; });
+            await h.key('ArrowUp', 300);
+            await h.waitState('rhythm');
+            await autoplay(h, 0);
+            await h.waitState('result', 20000);
+            const r = await resultInfo(h);
+            assert(r.win, 'reached gate and won the dance-off');
+        }
+    },
+    {
+        name: 'perf-rhythm',
+        async run(h, assert) {
+            await startRhythm(h, 0);
+            await autoplay(h, 0);
+            await sleep(2500);
+            const p = await h.sampleFps(3000);
+            h.note('rhythm @4x CPU: ' + p.workMs + ' ms/frame work (' + p.fps + ' fps uncapped)');
+            assert(p.workMs < 8, 'rhythm work < 8ms/frame (got ' + p.workMs + ')');
         }
     },
     {

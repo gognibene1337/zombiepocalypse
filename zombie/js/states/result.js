@@ -11,12 +11,13 @@ G.States.register('result', {
     enter: function (p) {
         this.win = !!p.win;
         this.reason = p.reason || 'maze';
+        this.rhythm = p.rhythm || null;     // dance-off breakdown, if any
         this.nav.focus = 0;
         G.Audio.sfx(this.win ? 'win' : 'lose');
     },
 
     layout: function () {
-        const bw = 240, bh = 54, x = (G.W - bw) / 2, y = Math.round(G.H * 0.66);
+        const bw = 240, bh = 54, x = (G.W - bw) / 2, y = Math.round(G.H * 0.72);
         const toMenu = function () { G.States.go('menu'); };
         const newRun = function () { G.Run.reset(); G.States.go('maze'); };
         let primary;
@@ -44,12 +45,23 @@ G.States.register('result', {
         U.textShadow(ctx, title, cx, G.H * 0.14, 32, this.win ? C.accent : C.danger);
         U.text(ctx, sub, cx, G.H * 0.14 + 34, 14, C.text, 'center', false);
 
-        if (this.win) G.Art.snakePortrait(ctx, cx, G.H * 0.36, 44);
-        else G.Art.zombie(ctx, cx, G.H * 0.32, 40, G.time * 3);
+        if (this.win) G.Art.snakePortrait(ctx, cx, G.H * 0.32, 40);
+        else G.Art.zombie(ctx, cx, G.H * 0.28, 36, G.time * 3);
 
-        U.text(ctx, 'Health: ' + Math.ceil(R.health) + ' / ' + R.maxHealth, cx, G.H * 0.53, 14, C.text, 'center', false);
-        U.text(ctx, 'Med-kits: ' + R.medkits, cx, G.H * 0.53 + 22, 14, C.text, 'center', false);
-        U.text(ctx, 'Dance-off attempts: ' + R.rhythmAttempts, cx, G.H * 0.53 + 44, 14, C.text, 'center', false);
+        let y = G.H * 0.5;
+        const rh = this.rhythm;
+        if (rh) {
+            const pct = Math.round(rh.acc * 100);
+            U.textShadow(ctx, pct + '%', cx, y, 30, this.win ? C.good : C.danger);
+            U.text(ctx, 'need 60% to pass', cx, y + 24, 11, C.dim, 'center', false);
+            U.text(ctx, 'Perfect ' + rh.perfect + '   Great ' + rh.great + '   Miss ' + rh.miss, cx, y + 46, 13, C.text, 'center', false);
+            U.text(ctx, 'Max combo ' + rh.maxCombo + (rh.saved ? '   Med-kit saves ' + rh.saved : ''), cx, y + 66, 13, C.text, 'center', false);
+            y += 92;
+        } else {
+            y += 10;
+        }
+        U.text(ctx, 'Health ' + Math.ceil(R.health) + '/' + R.maxHealth + '   Med-kits ' + R.medkits +
+            '   Attempts ' + R.rhythmAttempts, cx, y, 12, C.dim, 'center', false);
 
         U.drawButtons(ctx, this.buttons, this.nav);
     }
