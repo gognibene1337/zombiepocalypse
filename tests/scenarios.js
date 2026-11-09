@@ -92,6 +92,18 @@ module.exports = [
         }
     },
     {
+        name: 'menu-dance-off-shortcut',
+        async run(h, assert) {
+            await h.ev(() => { G.Run.medkits = 3; G.Run.health = 10; });   // leftovers from a previous run
+            await h.tapButton('DANCE-OFF ▶');
+            await h.waitState('rhythm');
+            const r = await h.ev(() => ({ hp: G.Run.health, kits: G.Run.medkits }));
+            assert(r.hp === 100 && r.kits === 0, 'shortcut starts a fresh run');
+            await h.page.waitForFunction(() => G.States.current.started, { timeout: 6000, polling: 50 });
+            assert(await h.ev(() => G.States.current.useTrack), 'dance track plays');
+        }
+    },
+    {
         name: 'maze-generation',
         async run(h, assert) {
             await startMaze(h);

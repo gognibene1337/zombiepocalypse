@@ -9,8 +9,9 @@ G.States.register('menu', {
     },
 
     layout: function () {
-        const bw = 220, bh = 56, x = (G.W - bw) / 2, y = Math.round(G.H * 0.58);
-        const dpadBtn = G.UI.button(this.dpadLabel(), x + 30, y + bh + 14, bw - 60, 40, function () {
+        const bw = 220, bh = 56, x = (G.W - bw) / 2, y = Math.round(G.H * 0.54);
+        const y2 = y + bh + 12, y3 = y2 + 44 + 12;
+        const dpadBtn = G.UI.button(this.dpadLabel(), x + 30, y3, bw - 60, 40, function () {
             G.Settings.dpad = !G.Settings.dpad;
             G.Settings.save();
             dpadBtn.label = G.States.list.menu.dpadLabel();
@@ -20,8 +21,14 @@ G.States.register('menu', {
                 G.Run.reset();
                 G.States.go('maze');
             }, 'primary'),
+            // Skip the maze: fresh run (full health, no med-kits) straight to the dance-off
+            G.UI.button('DANCE-OFF ▶', x + 15, y2, bw - 30, 44, function () {
+                G.Run.reset();
+                G.States.go('rhythm');
+            }, 'good'),
             dpadBtn
         ];
+        this.hintY = y3 + 40 + 28;     // help text sits below the buttons
         this.buildBackground();
     },
 
@@ -73,13 +80,14 @@ G.States.register('menu', {
         U.textShadow(ctx, 'ZOMBIEPOCALYPSE', cx, G.H * 0.12 + 64, 30, C.danger);
 
         const bob = Math.sin(G.time * 2) * 3;
-        G.Art.snakePortrait(ctx, cx, G.H * 0.4 + bob, 48);
+        G.Art.snakePortrait(ctx, cx, G.H * 0.36 + bob, Math.min(48, G.H * 0.07));
 
         U.drawButtons(ctx, this.buttons, this.nav);
 
-        U.text(ctx, 'Swipe, d-pad or arrow keys to move', cx, G.H * 0.78, 13, C.dim, 'center', false);
-        U.text(ctx, 'Escape the hedge maze.', cx, G.H * 0.78 + 20, 13, C.dim, 'center', false);
-        U.text(ctx, 'Out-dance the horde at the gate.', cx, G.H * 0.78 + 40, 13, C.dim, 'center', false);
-        U.text(ctx, 'M = mute   F = debug', cx, G.H * 0.89, 11, '#666', 'center', false);
+        const hy = this.hintY;
+        U.text(ctx, 'Swipe, d-pad or arrow keys to move', cx, hy, 13, C.dim, 'center', false);
+        U.text(ctx, 'Escape the hedge maze.', cx, hy + 20, 13, C.dim, 'center', false);
+        U.text(ctx, 'Out-dance the horde at the gate.', cx, hy + 40, 13, C.dim, 'center', false);
+        U.text(ctx, 'M = mute   F = debug', cx, Math.max(hy + 66, G.H * 0.9), 11, '#666', 'center', false);
     }
 });
