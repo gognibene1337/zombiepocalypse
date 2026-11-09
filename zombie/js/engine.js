@@ -22,7 +22,7 @@ window.G = {
     // Shared palette
     C: {
         bg: '#0b0f0a',
-        ground: '#2b3a1f',
+        ground: '#5b4d36',     // gravel path: high contrast vs hedges on dim screens
         hedge: '#1f4d2a',
         hedgeLight: '#2e6b3b',
         text: '#e8e6d9',
@@ -77,6 +77,25 @@ G.rng = function (seed) {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
 };
+
+// Haptic buzz where supported (Android Chrome). Silently ignored elsewhere.
+G.vibrate = function (ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch (_) { /* ignore */ }
+};
+
+// Persistent player settings (localStorage can be blocked: always try/catch)
+G.Settings = (function () {
+    const KEY = 'spe.settings.v1';
+    const s = { dpad: false };
+    try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (_) { /* ignore */ }
+    s.save = function () {
+        try { localStorage.setItem(KEY, JSON.stringify({ dpad: s.dpad })); } catch (_) { /* ignore */ }
+    };
+    return s;
+})();
+
+// Optional URL overrides for testing, e.g. index.html?seed=42
+G.params = new URLSearchParams(location.search);
 
 /*
  * Game loop: fixed-timestep updates (stable physics/timing on slow devices),

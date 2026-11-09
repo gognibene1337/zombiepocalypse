@@ -115,6 +115,24 @@ G.Art = (function () {
             ctx.fillRect(x + s - r * 0.25, y + r * 0.25, r * 0.5, r * 0.12);
         },
 
+        // Top-down zombie for the maze: arms reaching forward. alert = chasing.
+        zombieTop: function (ctx, x, y, r, dir, alert) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(ANG[dir] || 0);
+            ctx.fillStyle = C.zombie;
+            ctx.fillRect(-r * 0.78, -r * 1.15, r * 0.3, r * 0.85);
+            ctx.fillRect(r * 0.48, -r * 1.15, r * 0.3, r * 0.85);
+            ctx.fillStyle = '#3d4a35';
+            ellipse(ctx, 0, r * 0.1, r * 0.85, r * 0.5);
+            ctx.fillStyle = C.zombie;
+            circle(ctx, 0, -r * 0.05, r * 0.45);
+            ctx.fillStyle = alert ? '#ff3b3b' : '#5a1a1a';
+            ctx.fillRect(-r * 0.27, -r * 0.4, r * 0.17, r * 0.13);
+            ctx.fillRect(r * 0.1, -r * 0.4, r * 0.17, r * 0.13);
+            ctx.restore();
+        },
+
         // DDR-style arrow centred on (x, y). s = half-size.
         arrow: function (ctx, x, y, s, dir, fill, stroke) {
             ctx.save();

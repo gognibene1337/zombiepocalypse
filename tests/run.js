@@ -20,7 +20,7 @@ const CHROME = [
     path.join(process.env.LOCALAPPDATA || '', 'Google/Chrome/Application/chrome.exe')
 ].find(p => p && fs.existsSync(p));
 
-const URL = 'file:///' + path.resolve(__dirname, '../zombie/index.html').replace(/\\/g, '/');
+const URL = 'file:///' + path.resolve(__dirname, '../zombie/index.html').replace(/\\/g, '/') + '?seed=12345';
 const SHOTS = path.join(__dirname, 'shots');
 const CPU_THROTTLE = 4;
 

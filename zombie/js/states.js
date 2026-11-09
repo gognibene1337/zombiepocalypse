@@ -80,6 +80,9 @@ G.Run = {
     HEAL_AMOUNT: 35,
 
     reset: function () {
+        // Each run gets a fresh maze; ?seed=N in the URL pins it (testing)
+        const s = parseInt(G.params.get('seed'), 10);
+        this.seed = isNaN(s) ? (Math.random() * 1e9) | 0 : s;
         this.maxHealth = 100;
         this.health = 100;
         this.medkits = 0;

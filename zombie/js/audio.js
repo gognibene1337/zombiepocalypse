@@ -52,6 +52,7 @@ G.Audio = (function () {
         tick:   function () { A.tone(660, 0.03, 'square', 0.2); },
         hurt:   function () { A.tone(160, 0.18, 'sawtooth', 0.5); A.tone(110, 0.2, 'square', 0.3, 0.05); },
         pickup: function () { A.tone(660, 0.07, 'square', 0.3); A.tone(990, 0.1, 'square', 0.3, 0.07); },
+        growl:  function () { A.tone(90, 0.35, 'sawtooth', 0.35); A.tone(70, 0.3, 'sawtooth', 0.25, 0.12); },
         heal:   function () { [523, 659, 784].forEach(function (f, i) { A.tone(f, 0.08, 'triangle', 0.4, i * 0.06); }); },
         win:    function () { [523, 659, 784, 1047].forEach(function (f, i) { A.tone(f, 0.16, 'square', 0.35, i * 0.12); }); },
         lose:   function () { [392, 330, 262, 196].forEach(function (f, i) { A.tone(f, 0.22, 'triangle', 0.45, i * 0.15); }); },

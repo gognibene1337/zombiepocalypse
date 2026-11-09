@@ -136,7 +136,7 @@ G.Input = (function () {
             // A continuing drag in the same direction doesn't re-fire;
             // changing direction mid-drag does (lets you steer without lifting).
             if (dir !== gesture.lastDir) {
-                push({ type: 'dir', dir: dir, src: 'swipe', t: performance.now() });
+                push({ type: 'dir', dir: dir, src: 'swipe', t: performance.now(), sx: gesture.sx, sy: gesture.sy });
                 gesture.lastDir = dir;
             }
             gesture.ax = p.x;

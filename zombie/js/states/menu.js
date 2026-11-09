@@ -9,14 +9,24 @@ G.States.register('menu', {
     },
 
     layout: function () {
-        const bw = 220, bh = 56;
+        const bw = 220, bh = 56, x = (G.W - bw) / 2, y = Math.round(G.H * 0.58);
+        const dpadBtn = G.UI.button(this.dpadLabel(), x + 30, y + bh + 14, bw - 60, 40, function () {
+            G.Settings.dpad = !G.Settings.dpad;
+            G.Settings.save();
+            dpadBtn.label = G.States.list.menu.dpadLabel();
+        }, 'secondary');
         this.buttons = [
-            G.UI.button('START', (G.W - bw) / 2, Math.round(G.H * 0.62), bw, bh, function () {
+            G.UI.button('START', x, y, bw, bh, function () {
                 G.Run.reset();
                 G.States.go('maze');
-            }, 'primary')
+            }, 'primary'),
+            dpadBtn
         ];
         this.buildBackground();
+    },
+
+    dpadLabel: function () {
+        return 'D-PAD: ' + (G.Settings.dpad ? 'ON' : 'OFF');
     },
 
     // Hedge pattern is static, so pre-render it once to an offscreen canvas:
@@ -67,9 +77,9 @@ G.States.register('menu', {
 
         U.drawButtons(ctx, this.buttons, this.nav);
 
-        U.text(ctx, 'Swipe or use arrow keys to move', cx, G.H * 0.76, 13, C.dim, 'center', false);
-        U.text(ctx, 'Escape the hedge maze.', cx, G.H * 0.76 + 20, 13, C.dim, 'center', false);
-        U.text(ctx, 'Out-dance the horde at the gate.', cx, G.H * 0.76 + 40, 13, C.dim, 'center', false);
+        U.text(ctx, 'Swipe, d-pad or arrow keys to move', cx, G.H * 0.78, 13, C.dim, 'center', false);
+        U.text(ctx, 'Escape the hedge maze.', cx, G.H * 0.78 + 20, 13, C.dim, 'center', false);
+        U.text(ctx, 'Out-dance the horde at the gate.', cx, G.H * 0.78 + 40, 13, C.dim, 'center', false);
         U.text(ctx, 'M = mute   F = debug', cx, G.H * 0.89, 11, '#666', 'center', false);
     }
 });
