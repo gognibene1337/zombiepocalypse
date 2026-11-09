@@ -12,6 +12,7 @@
  * - Med-kits sit in dead ends; reaching the gate at the top -> Phase 2
  */
 G.States.register('maze', {
+    pausable: true,
     T: 24,               // tile size (logical units)
     COLS: 15,
     ROWS: 61,

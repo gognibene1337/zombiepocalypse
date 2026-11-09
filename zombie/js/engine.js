@@ -155,11 +155,11 @@ G.params = new URLSearchParams(location.search);
 // Pause everything when the tab/app goes to the background (saves battery)
 document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
+        G.States.pause();      // shows the pause menu on return (gameplay states only)
         G.stop();
         G.Audio.suspend();
-        if (G.States.current && G.States.current.pause) G.States.current.pause();
     } else {
-        G.Audio.resume();
+        if (!G.States.paused) G.Audio.resume();   // stay silent while the pause menu is up
         G.start();
     }
 });

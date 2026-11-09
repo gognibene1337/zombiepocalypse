@@ -58,8 +58,7 @@ function makeHelpers(page) {
         // Tap a button by label on the current state
         async tapButton(label) {
             const b = await page.evaluate(l => {
-                const s = G.States.current;
-                const btn = (s.buttons || []).find(b => b.label === l);
+                const btn = G.States.activeButtons().find(b => b.label === l);
                 return btn ? { x: btn.x + btn.w / 2, y: btn.y + btn.h / 2 } : null;
             }, label);
             if (!b) throw new Error('No button "' + label + '" on state ' + await h.state());

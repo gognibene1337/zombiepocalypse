@@ -14,6 +14,7 @@
  * Med-kits carried from the maze each forgive one Miss (counted as Great).
  */
 G.States.register('rhythm', {
+    pausable: true,
     DIRS: ['left', 'down', 'up', 'right'],
     COLORS: { left: '#d64ba0', down: '#4b9bd6', up: '#4bd67a', right: '#e0a040' },
     PERFECT: 0.07,         // ± seconds

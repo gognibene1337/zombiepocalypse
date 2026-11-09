@@ -110,6 +110,16 @@ G.UI = (function () {
         ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
         U.text(ctx, 'HP ' + Math.ceil(R.health), x + w + 8, y + h / 2 + 1, 12, C.text, 'left');
 
+        // Pause button (between HP and med-kits)
+        if (G.States.current && G.States.current.pausable) {
+            const pr = G.States.pauseRect();
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(pr.x + 6, pr.y + 5, pr.w - 12, pr.h - 10);
+            ctx.fillStyle = C.text;
+            ctx.fillRect(pr.x + 16, pr.y + 12, 4, 14);
+            ctx.fillRect(pr.x + 24, pr.y + 12, 4, 14);
+        }
+
         G.Art.medkit(ctx, G.W - 64, 19, 9);
         U.text(ctx, '× ' + R.medkits, G.W - 50, 20, 14, C.text, 'left');
     };

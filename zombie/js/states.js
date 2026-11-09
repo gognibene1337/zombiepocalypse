@@ -41,7 +41,62 @@ G.States = (function () {
     // True while a fade transition is running (used by tests)
     S.busy = function () { return fadeDir !== 0; };
 
+    // ---- Pause (only for states that set pausable: true)
+    const PAUSE_BTN = { x: 0, y: 0, w: 44, h: 38 };   // HUD hit area, left of the med-kit counter
+    let pauseButtons = null;
+    const pauseNav = { focus: 0 };
+    S.paused = false;
+
+    S.pauseRect = function () {
+        PAUSE_BTN.x = G.W - 134;
+        return PAUSE_BTN;
+    };
+
+    S.pause = function () {
+        if (S.paused || !S.current || !S.current.pausable || fadeDir !== 0) return;
+        S.paused = true;
+        G.Audio.suspend();     // freezes the audio clock, so the rhythm phase resumes in sync
+        const bw = 220, bh = 52, x = (G.W - bw) / 2, y = G.H * 0.45;
+        pauseNav.focus = 0;
+        pauseButtons = [
+            G.UI.button('RESUME', x, y, bw, bh, S.resume, 'primary'),
+            G.UI.button('QUIT TO MENU', x, y + bh + 14, bw, bh, function () {
+                S.resume();
+                S.go('menu');
+            }, 'secondary')
+        ];
+    };
+
+    // Buttons currently on screen (pause overlay wins). Used by tests.
+    S.activeButtons = function () {
+        return S.paused ? pauseButtons : (S.current && S.current.buttons) || [];
+    };
+
+    S.resume = function () {
+        if (!S.paused) return;
+        S.paused = false;
+        G.Audio.resume();
+    };
+
     S.update = function (dt) {
+        if (S.paused) {
+            const ev = G.Input.events;
+            for (let i = 0; i < ev.length; i++) if (ev[i].type === 'back') { S.resume(); return; }
+            G.UI.handleButtons(pauseButtons, pauseNav);
+            return;
+        }
+        // Pause button / back key in pausable states
+        if (fadeDir === 0 && S.current && S.current.pausable) {
+            const ev = G.Input.events, pr = S.pauseRect();
+            for (let i = 0; i < ev.length; i++) {
+                const e = ev[i];
+                if (e.type === 'back' || (e.type === 'tap' && G.UI.hit(pr, e.x, e.y))) {
+                    G.Input.endStep();
+                    S.pause();
+                    return;
+                }
+            }
+        }
         if (fadeDir === 1) {                  // fading out: freeze the old state
             fade += dt / FADE;
             if (fade >= 1) {
@@ -61,6 +116,12 @@ G.States = (function () {
 
     S.render = function (ctx) {
         if (S.current && S.current.render) S.current.render(ctx);
+        if (S.paused) {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, G.W, G.H);
+            G.UI.textShadow(ctx, 'PAUSED', G.W / 2, G.H * 0.33, 34, G.C.accent);
+            G.UI.drawButtons(ctx, pauseButtons, pauseNav);
+        }
         if (fade > 0) {
             ctx.globalAlpha = fade;
             ctx.fillStyle = '#000';

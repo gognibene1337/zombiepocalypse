@@ -364,6 +364,49 @@ module.exports = [
         }
     },
     {
+        name: 'pause-maze-resume-quit',
+        async run(h, assert) {
+            await startMaze(h, { noZombies: true });
+            const pr = await h.ev(() => G.States.pauseRect());
+            await h.tap(pr.x + pr.w / 2, pr.y + pr.h / 2);
+            assert(await h.ev(() => G.States.paused), 'HUD pause button pauses');
+            await h.shot('30-paused');
+            const dir = await openDir(h);
+            const a = await player(h);
+            await h.key(KEY[dir], 300);
+            const b = await player(h);
+            assert(a.x === b.x && a.y === b.y, 'no movement while paused');
+            await h.tapButton('RESUME');
+            assert(!(await h.ev(() => G.States.paused)), 'resume unpauses');
+            await h.key('Escape');
+            await sleep(100);
+            assert(await h.ev(() => G.States.paused), 'Esc pauses too');
+            await h.tapButton('QUIT TO MENU');
+            await h.waitState('menu');
+        }
+    },
+    {
+        name: 'pause-rhythm-freezes-clock',
+        async run(h, assert) {
+            await startRhythm(h, 6);
+            await sleep(500);
+            await h.key('Escape');
+            await sleep(300);
+            const t1 = await h.ev(() => G.States.current.songT);
+            await sleep(1000);
+            const t2 = await h.ev(() => G.States.current.songT);
+            assert(Math.abs(t2 - t1) < 0.05, 'song clock frozen while paused (moved ' + (t2 - t1).toFixed(3) + 's)');
+            await h.tapButton('RESUME');
+            await sleep(500);
+            const t3 = await h.ev(() => G.States.current.songT);
+            assert(t3 > t2 + 0.2, 'song clock runs again after resume');
+            await autoplay(h, 0);
+            await h.waitState('result', 20000);
+            const r = await resultInfo(h);
+            assert(r.win, 'can still win after pause/resume (' + JSON.stringify(r.rhythm) + ')');
+        }
+    },
+    {
         name: 'perf-maze',
         async run(h, assert) {
             await startMaze(h);
