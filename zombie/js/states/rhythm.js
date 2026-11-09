@@ -2,7 +2,7 @@
 /*
  * Phase 2: The Zombie Gate Dance-Off (rhythm QTE). Swipe LEFT / RIGHT on the beat.
  *
- * Music: the recorded track (G.TRACK, zombie/audio/dance.wav) when it loaded;
+ * Music: the recorded track (G.TRACKS.dance, zombie/audio/dance.wav) when it loaded;
  * otherwise a synthesized fallback beat (e.g. page opened from file://).
  *
  * Timing is driven by the AUDIO clock (AudioContext.currentTime), not frames,
@@ -71,13 +71,13 @@ G.States.register('rhythm', {
     startSong: function () {
         const A = G.Audio, ctx = A.ctx;
         this.useAudio = !!(ctx && ctx.state === 'running');
-        this.useTrack = this.useAudio && A.trackState === 'ready';
+        this.useTrack = this.useAudio && A.trackState('dance') === 'ready';
         this.lat = this.useAudio ? (ctx.outputLatency || ctx.baseLatency || 0) : 0;
         if (this.useTrack) this.buildTrackChart();
         else this.buildSynthChart();
 
         this.start = this.rawNow() + 0.3;
-        if (this.useTrack) this.source = A.playTrack(this.start, this.tempoMul);
+        if (this.useTrack) this.source = A.playTrack('dance', this.start, this.tempoMul);
         this.nextBeat = 0;
         this.started = true;
     },
@@ -96,7 +96,7 @@ G.States.register('rhythm', {
 
     // Chart from the recorded track's beat grid
     buildTrackChart: function () {
-        const T = G.TRACK, rate = this.tempoMul, spb = 60 / T.bpm;
+        const T = G.TRACKS.dance, rate = this.tempoMul, spb = 60 / T.bpm;
         const beats = [], beatIdx = [];
         for (let k = 0; T.firstBeat + k * spb < T.duration; k++) {
             beats.push({ t: (T.firstBeat + k * spb) / rate, spb: spb / rate });
@@ -230,7 +230,7 @@ G.States.register('rhythm', {
 
         if (!this.started) {
             // Wait briefly for the track to finish downloading/decoding
-            const st = G.Audio.trackState;
+            const st = G.Audio.trackState('dance');
             this.waitT += dt;
             const pending = st === 'loading' || st === 'fetched' || st === 'decoding';
             if (!pending || this.waitT >= this.LOAD_TIMEOUT) this.startSong();

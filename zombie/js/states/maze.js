@@ -73,6 +73,21 @@ G.States.register('maze', {
         this.growlT = 0;
         this.fx = [];             // floating texts
         this.done = false;
+        this.musicOn = false;     // background loop starts once decoded (see updateMusic)
+    },
+
+    exit: function () {
+        G.Audio.stopLoop(0.4);
+        this.musicOn = false;
+    },
+
+    // Start the background loop as soon as the track is decoded, then keep it fed
+    updateMusic: function () {
+        const A = G.Audio;
+        if (!this.musicOn && A.ctx && A.ctx.state === 'running' && A.trackState('maze') === 'ready') {
+            this.musicOn = A.startLoop('maze', G.TRACKS.maze.volume, G.TRACKS.maze.overlap);
+        }
+        if (this.musicOn) A.updateLoop();
     },
 
     layout: function () {
@@ -266,6 +281,7 @@ G.States.register('maze', {
 
     // ------------------------------------------------------------ update
     update: function (dt) {
+        this.updateMusic();
         if (this.done) return;
         if (!this.handleInput()) return;
 

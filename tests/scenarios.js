@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* Test scenarios. Each gets (h = helpers, assert). See run.js for helpers.
  * The page loads with ?seed=12345 so the maze is identical every run. */
 
@@ -278,6 +278,48 @@ module.exports = [
         }
     },
     {
+        name: 'maze-music-loops-and-stops',
+        async run(h, assert) {
+            await startMaze(h, { noZombies: true });
+            await h.page.waitForFunction(() => G.Audio.loopInfo() !== null, { timeout: 6000, polling: 100 });
+            const a = await h.ev(() => ({
+                info: G.Audio.loopInfo(), now: G.Audio.ctx.currentTime, state: G.Audio.trackState('maze')
+            }));
+            h.note('maze music ' + a.state + ', copies scheduled ' + a.info.copies + ', next repeat in ' + (a.info.next - a.now).toFixed(1) + 's');
+            assert(a.info.name === 'maze' && a.info.playing >= 1, 'maze loop is playing');
+            // Next copy is scheduled to overlap the previous one's fade-out
+            const gap = a.info.next - a.now;
+            assert(gap > 30 && gap < 39.96 - 1.2 + 0.1, 'next repeat starts before the track ends (in ' + gap.toFixed(1) + 's)');
+
+            // Pausing suspends the audio clock (music pauses with it)
+            await h.key('Escape');
+            await sleep(300);
+            assert(await h.ev(() => G.Audio.ctx.state) === 'suspended', 'pause suspends music');
+            await h.tapButton('RESUME');
+            await sleep(300);
+            assert(await h.ev(() => G.Audio.ctx.state) === 'running', 'resume restarts music');
+
+            // Leaving the maze stops the loop; the dance track takes over
+            await h.ev(() => { G.States.list.rhythm.TEST_NOTES = 4; G.States.go('rhythm'); });
+            await h.waitState('rhythm');
+            assert(await h.ev(() => G.Audio.loopInfo()) === null, 'maze music stops at the dance-off');
+        }
+    },
+    {
+        name: 'maze-music-chains-copies',
+        async run(h, assert) {
+            await startMaze(h, { noZombies: true });
+            await h.page.waitForFunction(() => G.Audio.loopInfo() !== null, { timeout: 6000, polling: 100 });
+            // Restart the loop with a huge overlap so the 2nd copy gets scheduled right away
+            const r = await h.ev(() => {
+                G.Audio.startLoop('maze', 1.2, 39.8);
+                G.Audio.updateLoop();
+                return G.Audio.loopInfo();
+            });
+            assert(r.copies >= 2 && r.playing >= 2, 'consecutive copies chain without a gap (copies ' + r.copies + ')');
+        }
+    },
+    {
         name: 'rhythm-idle-fails-and-retry',
         async run(h, assert) {
             await startRhythm(h, 6);
@@ -330,14 +372,14 @@ module.exports = [
         async run(h, assert) {
             await startRhythm(h, 0);
             const r = await h.ev(() => {
-                const s = G.States.current, T = G.TRACK, spb = 60 / T.bpm;
+                const s = G.States.current, T = G.TRACKS.dance, spb = 60 / T.bpm;
                 // Every note must sit exactly on a beat of the track's grid
                 const offGrid = s.notes.filter(n => {
                     const k = (n.t * s.tempoMul - T.firstBeat) / spb;
                     return Math.abs(k - Math.round(k)) > 1e-6;
                 }).length;
                 return {
-                    track: s.useTrack, state: G.Audio.trackState, n: s.notes.length,
+                    track: s.useTrack, state: G.Audio.trackState('dance'), n: s.notes.length,
                     dirs: [...new Set(s.notes.map(n => n.dir))].sort().join(','),
                     offGrid, playing: !!s.source, end: s.endT
                 };
@@ -368,7 +410,7 @@ module.exports = [
         file: true,
         async run(h, assert) {
             await startRhythm(h, 6);
-            const r = await h.ev(() => ({ track: G.States.current.useTrack, state: G.Audio.trackState }));
+            const r = await h.ev(() => ({ track: G.States.current.useTrack, state: G.Audio.trackState('dance') }));
             assert(!r.track && r.state === 'unavailable', 'file:// uses synth beat (state ' + r.state + ')');
             await autoplay(h, 0);
             await h.waitState('result', 20000);

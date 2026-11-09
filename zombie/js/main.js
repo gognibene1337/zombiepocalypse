@@ -14,7 +14,9 @@ window.addEventListener('resize', G.resize);
 window.addEventListener('orientationchange', G.resize);
 
 G.resize();
-G.Audio.loadTrack(G.TRACK.url);   // download now so it's ready by the dance-off
+// Download music now; it decodes as soon as the first tap unlocks audio
+G.Audio.loadTrack('maze', G.TRACKS.maze.url);
+G.Audio.loadTrack('dance', G.TRACKS.dance.url);
 G.Run.reset();
 G.States.go('menu', null, true);
 G.start();

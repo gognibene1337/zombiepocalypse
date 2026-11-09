@@ -23,40 +23,45 @@ G.Audio = (function () {
         decodePending();
     };
 
-    // ---- Music track (recorded WAV) ----
+    // ---- Recorded music tracks (WAV), by name ----
     // States: idle -> loading -> fetched -> decoding -> ready | failed | unavailable
     // Fetch starts at boot; decoding waits for the AudioContext (first user gesture).
-    A.trackState = 'idle';
-    A.trackBuffer = null;
-    let trackRaw = null;
+    const tracks = {};   // name -> { state, raw, buffer }
 
-    A.loadTrack = function (url) {
+    A.loadTrack = function (name, url) {
+        const tr = tracks[name] = { state: 'loading', raw: null, buffer: null };
         if (location.protocol === 'file:') {     // Chrome blocks fetch() from file:// pages
-            A.trackState = 'unavailable';
+            tr.state = 'unavailable';
             return;
         }
-        A.trackState = 'loading';
         fetch(url)
             .then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-            .then(function (ab) { trackRaw = ab; A.trackState = 'fetched'; decodePending(); })
-            .catch(function () { A.trackState = 'failed'; });
+            .then(function (ab) { tr.raw = ab; tr.state = 'fetched'; decodePending(); })
+            .catch(function () { tr.state = 'failed'; });
     };
 
+    A.trackState = function (name) { return tracks[name] ? tracks[name].state : 'idle'; };
+
     function decodePending() {
-        if (!A.ctx || !trackRaw || A.trackState !== 'fetched') return;
-        const ab = trackRaw;
-        trackRaw = null;                          // let the compressed copy be GC'd
-        A.trackState = 'decoding';
-        A.ctx.decodeAudioData(ab)
-            .then(function (buf) { A.trackBuffer = buf; A.trackState = 'ready'; })
-            .catch(function () { A.trackState = 'failed'; });
+        if (!A.ctx) return;
+        Object.keys(tracks).forEach(function (name) {
+            const tr = tracks[name];
+            if (tr.state !== 'fetched') return;
+            const ab = tr.raw;
+            tr.raw = null;                        // let the compressed copy be GC'd
+            tr.state = 'decoding';
+            A.ctx.decodeAudioData(ab)
+                .then(function (buf) { tr.buffer = buf; tr.state = 'ready'; })
+                .catch(function () { tr.state = 'failed'; });
+        });
     }
 
-    // Start the track at absolute context time `at`. rate > 1 = faster (and higher pitch).
-    A.playTrack = function (at, rate, vol) {
-        if (!A.ctx || !A.trackBuffer) return null;
+    // Play a track once from absolute context time `at`. rate > 1 = faster (and higher pitch).
+    A.playTrack = function (name, at, rate, vol) {
+        const tr = tracks[name];
+        if (!A.ctx || !tr || !tr.buffer) return null;
         const s = A.ctx.createBufferSource(), g = A.ctx.createGain();
-        s.buffer = A.trackBuffer;
+        s.buffer = tr.buffer;
         s.playbackRate.value = rate || 1;
         g.gain.value = vol == null ? 1.6 : vol;  // master is 0.25; the track is pre-mixed
         s.connect(g);
@@ -69,6 +74,63 @@ G.Audio = (function () {
         if (!s) return;
         try { s.stop(); } catch (_) { /* already stopped */ }
         try { s.disconnect(); } catch (_) { /* ignore */ }
+    };
+
+    /*
+     * Background music loop. Copies of the track are chained with an overlap:
+     * each next copy starts `overlap` seconds before the previous one ends,
+     * so the track's own fade-out becomes a crossfade. Scheduling uses the
+     * audio clock, so pausing (ctx.suspend) pauses the loop too.
+     * Call A.updateLoop() regularly (every frame is fine; it's cheap).
+     */
+    let loop = null;
+
+    A.startLoop = function (name, vol, overlap) {
+        const tr = tracks[name];
+        if (!A.ctx || !tr || !tr.buffer) return false;
+        A.stopLoop(0);
+        const c = A.ctx, g = c.createGain(), now = c.currentTime;
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(vol, now + 0.8);      // gentle fade-in
+        g.connect(master);
+        loop = { name: name, buffer: tr.buffer, gain: g, next: now + 0.05, overlap: overlap || 0, srcs: [], copies: 0 };
+        A.updateLoop();
+        return true;
+    };
+
+    A.updateLoop = function () {
+        if (!loop) return;
+        const c = A.ctx, L = loop;
+        while (L.next < c.currentTime + 0.5) {                // schedule ~0.5s ahead
+            const s = c.createBufferSource();
+            s.buffer = L.buffer;
+            s.connect(L.gain);
+            s.start(L.next);
+            s.onended = function () {
+                const i = L.srcs.indexOf(s);
+                if (i >= 0) L.srcs.splice(i, 1);
+                try { s.disconnect(); } catch (_) { /* ignore */ }
+            };
+            L.srcs.push(s);
+            L.copies++;
+            L.next += L.buffer.duration - L.overlap;
+        }
+    };
+
+    A.stopLoop = function (fade) {
+        if (!loop) return;
+        const c = A.ctx, L = loop, t = c.currentTime, f = fade || 0;
+        loop = null;
+        L.gain.gain.cancelScheduledValues(t);
+        L.gain.gain.setValueAtTime(L.gain.gain.value, t);
+        L.gain.gain.linearRampToValueAtTime(0, t + f + 0.01);
+        L.srcs.forEach(function (s) { try { s.stop(t + f + 0.05); } catch (_) { /* ignore */ } });
+        setTimeout(function () { try { L.gain.disconnect(); } catch (_) { /* ignore */ } }, (f + 0.2) * 1000);
+    };
+
+    // For tests / debugging
+    A.loopInfo = function () {
+        return loop ? { name: loop.name, copies: loop.copies, playing: loop.srcs.length, next: loop.next } : null;
     };
 
     A.suspend = function () { if (A.ctx && A.ctx.state === 'running') A.ctx.suspend(); };
