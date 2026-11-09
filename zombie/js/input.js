@@ -4,7 +4,8 @@
  *
  * Discrete events, valid for ONE update step (read G.Input.events):
  *   { type: 'dir',  dir, src: 'key'|'swipe', t }   arrow/WASD press or swipe
- *   { type: 'tap',  x, y, t }                       short press without swiping
+ *   { type: 'tap',  x, y, t }                       short press without swiping (on release)
+ *   { type: 'press', x, y, t }                      any finger going down (no waiting)
  *   { type: 'confirm' }                             Enter / Space
  *   { type: 'back' }                                Esc / P
  *   { type: 'key',  code }                          any other key (e.g. 'KeyH')
@@ -106,7 +107,10 @@ G.Input = (function () {
     c.addEventListener('pointerdown', function (e) {
         e.preventDefault();
         G.Audio.unlock();
-        if (gesture) return; // ignore extra fingers
+        // 'press' fires on finger-DOWN for every finger (fast tapping games)
+        const pp = toLogical(e);
+        push({ type: 'press', x: pp.x, y: pp.y, t: performance.now() });
+        if (gesture) return; // extra fingers don't start swipes/taps
         try { c.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
         const p = toLogical(e);
         gesture = {
@@ -158,7 +162,11 @@ G.Input = (function () {
         I.pointer.down = false;
     }
 
-    c.addEventListener('pointerup', function (e) { endGesture(e, false); });
+    c.addEventListener('pointerup', function (e) { G.Audio.unlock(); endGesture(e, false); });
+    // Chrome only grants audio permission on some events (touchEND counts, touchSTART
+    // doesn't), so retry the unlock on every kind of release.
+    window.addEventListener('touchend', function () { G.Audio.unlock(); });
+    window.addEventListener('click', function () { G.Audio.unlock(); });
     c.addEventListener('pointercancel', function (e) { endGesture(e, true); });
 
     // Block long-press menus and any leftover browser touch scrolling

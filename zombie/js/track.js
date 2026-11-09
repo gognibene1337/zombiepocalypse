@@ -23,5 +23,21 @@ G.TRACKS = {
         url: 'audio/maze.wav',
         volume: 1.2,          // relative to master (0.25)
         overlap: 1.2          // seconds
+    },
+
+    // Bonus game (Cat Pump) loop ("Santa", 15s). Sound stops hard at 14.62s,
+    // then silence: restart exactly there for a gapless loop.
+    santa: {
+        url: 'audio/santa.wav',
+        volume: 1.2,
+        overlap: 0.38
+    },
+
+    // Bonus game (Feast Fling) loop ("harvest", 33.2s). The last ~0.8s is a
+    // decay tail, so the next copy starts over it.
+    harvest: {
+        url: 'audio/harvest.wav',
+        volume: 1.1,
+        overlap: 0.8
     }
 };

@@ -9,12 +9,20 @@ Your health and med-kits carry over from the maze into the dance-off:
 - Each med-kit forgives one missed note.
 - The lower your health, the faster the music plays.
 
+### Bonus games
+
+Both bonus games are on the main menu.
+
+- **Cat Pump.** Tap the black cat in the Santa hat as many times as you can in 60 seconds. Beat your best score and presents burst across the screen, along with photos of Kiwi, the real cat who inspired it.
+- **Feast Fling.** A slingshot game in the style of Angry Birds. Fling 10 Thanksgiving foods into the basket for their course: main course, sides or dessert. A correct shot earns a "Yum, yum!".
+
 ## Play it locally
 
 The game is plain HTML5 Canvas and JavaScript, with no build step or libraries. The music files have to be served over HTTP, because browsers won't load them from a page opened directly from disk.
 
 ```bash
 node tools/serve.js        # then open http://localhost:8080/
+node tools/serve.js 8080 --lan   # also reachable from a phone on the same Wi-Fi
 ```
 
 Or, in VS Code, right-click `zombie/index.html` and choose **Open with Live Server**.
@@ -51,8 +59,9 @@ zombie/              the game (open index.html)
   js/input.js        touch swipes, taps and keyboard
   js/audio.js        Web Audio: sound effects, music tracks, looping
   js/mazegen.js      maze generation and pathfinding
-  js/states/         menu, maze, rhythm and result screens
+  js/states/         menu, maze, rhythm and result screens, plus the cat.js and feast.js bonus games
   audio/             music (mono WAV)
+  img/kiwi.jpg       Kiwi the cat
 tests/               puppeteer test runner and scenarios
 tools/serve.js       local static server for play-testing
 tools/prep-track.js  converts a WAV to mono and detects its tempo for the rhythm chart
@@ -60,5 +69,5 @@ tools/prep-track.js  converts a WAV to mono and detects its tempo for the rhythm
 
 ## Credits
 
-- All graphics and sound effects are drawn and synthesized in code.
+- All graphics and sound effects are drawn and synthesized in code, apart from the photo of Kiwi.
 - The music was generated with [Suno](https://suno.com).

@@ -24,7 +24,7 @@ G.States.register('rhythm', {
     SPEED: 300,            // arrow scroll speed (units / s)
     PASS: 0.6,             // accuracy needed to pass
     MAX_SPEEDUP: 0.15,     // tempo increase at (almost) zero health
-    LOAD_TIMEOUT: 4,       // seconds to wait for the track before using the synth beat
+    LOAD_TIMEOUT: 8,       // seconds to wait for audio + track before using the synth beat
     // Synth fallback: 4-beat count-in, then 4 sections of 8 beats, each faster
     SECTIONS: [
         { bpm: 100, every: 2 },
@@ -229,11 +229,14 @@ G.States.register('rhythm', {
         if (this.finished) return;
 
         if (!this.started) {
-            // Wait briefly for the track to finish downloading/decoding
-            const st = G.Audio.trackState('dance');
+            // Wait for the audio engine to be running and the track to finish
+            // downloading/decoding (both can lag a moment after the first tap)
+            const A = G.Audio, st = A.trackState('dance');
             this.waitT += dt;
-            const pending = st === 'loading' || st === 'fetched' || st === 'decoding';
-            if (!pending || this.waitT >= this.LOAD_TIMEOUT) this.startSong();
+            if (A.ctx && A.ctx.state !== 'running') A.unlock();
+            const audioPending = !A.ctx || A.ctx.state !== 'running';
+            const trackPending = st === 'loading' || st === 'fetched' || st === 'decoding';
+            if ((!audioPending && !trackPending) || this.waitT >= this.LOAD_TIMEOUT) this.startSong();
             else return;
         }
 
@@ -300,6 +303,7 @@ G.States.register('rhythm', {
 
         if (!this.started) {
             U.text(ctx, 'Loading music...', cx, G.H * 0.5, 16, C.dim, 'center', false);
+            U.text(ctx, 'Tap the screen if this takes a while', cx, G.H * 0.5 + 24, 12, C.dim, 'center', false);
             U.drawHUD(ctx);
             return;
         }
@@ -375,6 +379,13 @@ G.States.register('rhythm', {
         if (this.tempoMul > 1.01) {
             U.text(ctx, 'Low health: tempo +' + Math.round((this.tempoMul - 1) * 100) + '%',
                 cx, G.H - 26, 11, C.danger, 'center', false);
+        }
+        // Debug: say why the recorded track isn't playing
+        if (G.debug && !this.useTrack) {
+            const A = G.Audio;
+            U.text(ctx, 'Fallback beat: ' + (location.protocol === 'file:' ? 'opened from file:// (use a server)'
+                : 'track ' + A.trackState('dance') + ', audio ' + (A.ctx ? A.ctx.state : 'none')),
+                cx, G.H - 88, 11, C.danger, 'center', false);
         }
 
         U.drawHUD(ctx);

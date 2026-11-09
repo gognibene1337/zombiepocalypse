@@ -17,6 +17,8 @@ G.resize();
 // Download music now; it decodes as soon as the first tap unlocks audio
 G.Audio.loadTrack('maze', G.TRACKS.maze.url);
 G.Audio.loadTrack('dance', G.TRACKS.dance.url);
+G.Audio.loadTrack('santa', G.TRACKS.santa.url);
+G.Audio.loadTrack('harvest', G.TRACKS.harvest.url);
 G.Run.reset();
 G.States.go('menu', null, true);
 G.start();

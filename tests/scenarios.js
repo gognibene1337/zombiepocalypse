@@ -104,6 +104,249 @@ module.exports = [
         }
     },
     {
+        // Real browsers: audio only unlocks after a gesture. Tap the menu like a player.
+        name: 'autoplay-dance-off-plays-track',
+        realAutoplay: true,
+        async run(h, assert) {
+            await h.tapButton('DANCE-OFF ▶');
+            await h.waitState('rhythm');
+            await h.page.waitForFunction(() => G.States.current.started, { timeout: 8000, polling: 50 });
+            const r = await h.ev(() => ({
+                ctx: G.Audio.ctx && G.Audio.ctx.state, track: G.Audio.trackState('dance'),
+                useAudio: G.States.current.useAudio, useTrack: G.States.current.useTrack
+            }));
+            h.note(JSON.stringify(r));
+            assert(r.useTrack, 'dance track plays after tapping DANCE-OFF from a cold start');
+        }
+    },
+    {
+        name: 'autoplay-maze-music-plays',
+        realAutoplay: true,
+        async run(h, assert) {
+            await h.tapButton('START');
+            await h.waitState('maze');
+            await h.page.waitForFunction(() => G.Audio.loopInfo() !== null, { timeout: 8000, polling: 100 });
+            assert(await h.ev(() => G.Audio.ctx.state) === 'running', 'audio running in the maze');
+        }
+    },
+    {
+        name: 'cat-pump-high-score-and-presents',
+        async run(h, assert) {
+            await h.ev(() => localStorage.removeItem('spe.catHigh.v1'));
+            await h.tapButton('CAT PUMP');
+            await h.waitState('cat');
+            const cat = await h.ev(() => G.States.current.cat);
+            await h.shot('40-cat-ready');
+
+            // Round 1: first tap starts the clock; 5 pumps
+            for (let i = 0; i < 5; i++) await h.tap(cat.x + (i % 2 ? 20 : -20), cat.y);
+            let s = await h.ev(() => ({ phase: G.States.current.phase, count: G.States.current.count }));
+            assert(s.phase === 'play' && s.count === 5, 'taps on the cat count (' + JSON.stringify(s) + ')');
+            await h.tap(30, 760);                                   // off the cat: ignored
+            assert(await h.ev(() => G.States.current.count) === 5, 'taps off the cat do not count');
+            const tl = await h.ev(() => G.States.current.timeLeft);
+            assert(tl < 60 && tl > 55, 'clock is running (' + tl.toFixed(2) + 's left)');
+
+            await h.ev(() => { G.States.current.timeLeft = 0.05; });  // fast-forward to the end
+            await h.page.waitForFunction(() => G.States.current.phase === 'done', { timeout: 3000 });
+            s = await h.ev(() => ({ high: G.States.current.high, nh: G.States.current.newHigh,
+                presents: G.States.current.presents.length, saved: localStorage.getItem('spe.catHigh.v1') }));
+            assert(s.high === 5 && s.nh && s.saved === '5', 'first round sets best = 5 and saves it');
+            assert(s.presents > 0, 'presents fly on a new best');
+            await sleep(250);
+            await h.shot('41-cat-first-best');
+
+            // Round 2: passing the old best (5) triggers presents mid-round
+            await sleep(700);                                       // button lock after time's up
+            await h.tapButton('PLAY AGAIN');
+            await h.waitState('cat');
+            for (let i = 0; i < 5; i++) await h.tap(cat.x, cat.y);
+            assert(await h.ev(() => G.States.current.presents.length) === 0, 'no presents while still below best');
+            await h.tap(cat.x, cat.y);                              // 6th pump beats 5
+            s = await h.ev(() => ({ nh: G.States.current.newHigh, presents: G.States.current.presents.length, phase: G.States.current.phase }));
+            assert(s.nh && s.presents > 0 && s.phase === 'play', 'beating the best mid-round launches presents');
+            const k = await h.ev(() => ({
+                sprite: !!G.Kiwi.sprite, pop: G.States.current.kiwiT,
+                flying: G.States.current.presents.filter(p => p.kiwi).length
+            }));
+            h.note('Kiwi: big pop-up ' + k.pop.toFixed(1) + 's, ' + k.flying + ' flying Kiwis');
+            assert(k.sprite, "Kiwi's photo loaded");
+            assert(k.pop > 0, 'big Kiwi pops up on a new best');
+            assert(k.flying > 0, 'some flying presents are Kiwi photos');
+            await sleep(200);
+            await h.shot('42-cat-live-celebration');
+            await h.ev(() => { G.States.current.timeLeft = 0.05; });
+            await h.page.waitForFunction(() => G.States.current.phase === 'done', { timeout: 3000 });
+            assert(await h.ev(() => localStorage.getItem('spe.catHigh.v1')) === '6', 'new best 6 saved');
+
+            // Round 3: lower score keeps the best
+            await sleep(900);
+            await h.tapButton('PLAY AGAIN');
+            await h.waitState('cat');
+            await h.tap(cat.x, cat.y);
+            await h.ev(() => { G.States.current.timeLeft = 0.05; });
+            await h.page.waitForFunction(() => G.States.current.phase === 'done', { timeout: 3000 });
+            s = await h.ev(() => ({ nh: G.States.current.newHigh, saved: localStorage.getItem('spe.catHigh.v1') }));
+            assert(!s.nh && s.saved === '6', 'lower score keeps best at 6');
+            await h.shot('43-cat-done');
+            await sleep(900);
+            await h.tapButton('MAIN MENU');
+            await h.waitState('menu');
+        }
+    },
+    {
+        name: 'cat-pump-music-and-pause',
+        async run(h, assert) {
+            await h.tapButton('CAT PUMP');
+            await h.waitState('cat');
+            await h.page.waitForFunction(() => G.Audio.loopInfo() !== null, { timeout: 6000, polling: 100 });
+            const info = await h.ev(() => G.Audio.loopInfo());
+            assert(info.name === 'santa', 'Santa track loops in the bonus game');
+            const cat = await h.ev(() => G.States.current.cat);
+            await h.tap(cat.x, cat.y);
+            await h.key('Escape');
+            await sleep(100);
+            const t1 = await h.ev(() => G.States.current.timeLeft);
+            await sleep(800);
+            const t2 = await h.ev(() => G.States.current.timeLeft);
+            assert(Math.abs(t2 - t1) < 0.001, 'clock frozen while paused');
+            await h.tapButton('QUIT TO MENU');
+            await h.waitState('menu');
+            assert(await h.ev(() => G.Audio.loopInfo()) === null, 'music stops on leaving');
+        }
+    },
+    {
+        name: 'perf-cat-celebration',
+        async run(h, assert) {
+            await h.tapButton('CAT PUMP');
+            await h.waitState('cat');
+            await h.ev(() => { const s = G.States.current; s.celebrate(); s.burst(80); s.rainT = 10; });
+            const p = await h.sampleFps(2500);
+            h.note('cat + presents @4x CPU: ' + p.workMs + ' ms/frame work');
+            assert(p.workMs < 8, 'celebration work < 8ms/frame (got ' + p.workMs + ')');
+        }
+    },
+    {
+        name: 'feast-every-basket-reachable',
+        async run(h, assert) {
+            await h.tapButton('FEAST FLING');
+            await h.waitState('feast');
+            const r = await h.ev(() => {
+                const s = G.States.current;
+                return s.baskets.map((b, i) => ({ course: b.course, aim: s.aimFor(i) }));
+            });
+            h.note(r.map(b => b.course + (b.aim ? ' ok' : ' UNREACHABLE')).join(', '));
+            assert(r.every(b => b.aim), 'every basket can be hit');
+            const seq = await h.ev(() => G.States.current.seq.map(id => G.FOODS[id].course));
+            assert(seq.length === 10, '10 items per game');
+            ['main', 'sides', 'dessert'].forEach(c => assert(seq.filter(x => x === c).length >= 3, 'at least 3 ' + c));
+            await h.shot('50-feast-start');
+        }
+    },
+    {
+        name: 'feast-full-game-yum-wrong-miss',
+        async run(h, assert) {
+            await h.ev(() => localStorage.removeItem('spe.feastHigh.v1'));
+            await h.tapButton('FEAST FLING');
+            await h.waitState('feast');
+            const waitAim = () => h.page.waitForFunction(() => G.States.current.phase === 'aim' || G.States.current.phase === 'done', { timeout: 8000, polling: 50 });
+            const courseIdx = (wantCorrect) => h.ev(wc => {
+                const s = G.States.current, c = G.FOODS[s.seq[s.idx]].course;
+                return s.baskets.findIndex(b => wc ? b.course === c : b.course !== c);
+            }, wantCorrect);
+
+            // Shot 1: a real touch drag-and-release into the correct basket
+            const bi = await courseIdx(true);
+            const pull = await h.ev(i => G.States.current.aimFor(i), bi);
+            const a = await h.ev(() => G.States.current.anchor);
+            const p0 = await h.toPage(a.x, a.y);
+            await h.page.touchscreen.touchStart(p0.x, p0.y);
+            for (let k = 1; k <= 6; k++) {
+                const pk = await h.toPage(a.x + pull.x * k / 6, a.y + pull.y * k / 6);
+                await h.page.touchscreen.touchMove(pk.x, pk.y);
+            }
+            await sleep(120);
+            await h.shot('51-feast-aiming');
+            await h.page.touchscreen.touchEnd();
+            await h.page.waitForFunction(() => G.States.current.results.length === 1, { timeout: 6000, polling: 30 });
+            let s = await h.ev(() => ({ r: G.States.current.results[0], score: G.States.current.score, yum: !!G.States.current.yum,
+                hearts: G.States.current.parts.filter(p => p.kind === 'heart').length }));
+            assert(s.r === 'yum' && s.score === 1, 'drag-and-release into the right basket scores (' + JSON.stringify(s) + ')');
+            assert(s.yum && s.hearts > 0, 'yum animation plays');
+            await sleep(250);
+            await h.shot('52-feast-yum');
+
+            // Shot 2: wrong basket
+            await waitAim();
+            const wi = await courseIdx(false);
+            await h.ev(i => { const s = G.States.current, p = s.aimFor(i); s.launch(p.x, p.y); }, wi);
+            await h.page.waitForFunction(() => G.States.current.results.length === 2, { timeout: 6000, polling: 30 });
+            assert(await h.ev(() => G.States.current.results[1]) === 'wrong', 'wrong basket is marked wrong');
+            await sleep(150);
+            await h.shot('53-feast-wrong');
+
+            // Shot 3: fling it backwards off-screen
+            await waitAim();
+            await h.ev(() => G.States.current.launch(40, -10));
+            await h.page.waitForFunction(() => G.States.current.results.length === 3, { timeout: 6000, polling: 30 });
+            assert(await h.ev(() => G.States.current.results[2]) === 'miss', 'off-screen shot is a miss');
+
+            // Shots 4-10: all correct
+            for (let n = 4; n <= 10; n++) {
+                await waitAim();
+                const ci = await courseIdx(true);
+                await h.ev(i => { const s = G.States.current, p = s.aimFor(i); s.launch(p.x, p.y); }, ci);
+                await h.page.waitForFunction(k => G.States.current.results.length === k, { timeout: 6000, polling: 30 }, n);
+            }
+            await h.page.waitForFunction(() => G.States.current.phase === 'done', { timeout: 6000, polling: 50 });
+            s = await h.ev(() => ({ score: G.States.current.score, res: G.States.current.results.join(','),
+                saved: localStorage.getItem('spe.feastHigh.v1'), filled: G.States.current.baskets.map(b => b.contents.length) }));
+            h.note('results: ' + s.res + '  baskets hold ' + s.filled.join('/'));
+            assert(s.score === 8 && s.saved === '8', 'final score 8/10 saved as best');
+            await sleep(300);
+            await h.shot('54-feast-done');
+            await sleep(600);
+            await h.tapButton('MAIN MENU');
+            await h.waitState('menu');
+        }
+    },
+    {
+        name: 'feast-music-and-pause',
+        async run(h, assert) {
+            await h.tapButton('FEAST FLING');
+            await h.waitState('feast');
+            await h.page.waitForFunction(() => G.Audio.loopInfo() !== null, { timeout: 6000, polling: 100 });
+            assert(await h.ev(() => G.Audio.loopInfo().name) === 'harvest', 'harvest track loops');
+            await h.ev(() => { const s = G.States.current, p = s.aimFor(0); s.launch(p.x, p.y); });
+            await sleep(150);
+            await h.key('Escape');
+            await sleep(100);
+            const y1 = await h.ev(() => G.States.current.proj && G.States.current.proj.y);
+            await sleep(500);
+            const y2 = await h.ev(() => G.States.current.proj && G.States.current.proj.y);
+            assert(y1 != null && y1 === y2, 'food freezes mid-air while paused');
+            await h.tapButton('QUIT TO MENU');
+            await h.waitState('menu');
+            assert(await h.ev(() => G.Audio.loopInfo()) === null, 'music stops on leaving');
+        }
+    },
+    {
+        name: 'perf-feast-aiming',
+        async run(h, assert) {
+            await h.tapButton('FEAST FLING');
+            await h.waitState('feast');
+            // Hold an aim so the preview arc is simulated every frame
+            await h.ev(() => { const s = G.States.current; s.aiming = true; s.pull.x = -60; s.pull.y = 60; });
+            const a = await h.ev(() => G.States.current.anchor);
+            const p0 = await h.toPage(a.x - 60, a.y + 60);
+            await h.page.touchscreen.touchStart(p0.x, p0.y);
+            const p = await h.sampleFps(2500);
+            await h.page.touchscreen.touchEnd();
+            h.note('feast aiming @4x CPU: ' + p.workMs + ' ms/frame work');
+            assert(p.workMs < 8, 'feast work < 8ms/frame (got ' + p.workMs + ')');
+        }
+    },
+    {
         name: 'maze-generation',
         async run(h, assert) {
             await startMaze(h);

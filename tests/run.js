@@ -24,7 +24,7 @@ const CHROME = [
 // doesn't work from file://). Scenarios with `file: true` use file:// instead.
 const http = require('http');
 const ROOT = path.resolve(__dirname, '..');
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.wav': 'audio/wav', '.json': 'application/json', '.png': 'image/png' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.wav': 'audio/wav', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const FILE_URL = 'file:///' + path.join(ROOT, 'zombie/index.html').replace(/\\/g, '/') + '?seed=12345';
 let URL = null; // set once the server is listening
 
@@ -140,16 +140,23 @@ const scenarios = require('./scenarios');
 
     const filter = process.argv[2] || '';
     const list = scenarios.filter(s => s.name.includes(filter));
-    const browser = await puppeteer.launch({
+    const baseArgs = ['--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'];
+    const launch = args => puppeteer.launch({
         executablePath: CHROME,
         headless: process.env.HEADED ? false : 'new',
-        args: ['--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
-            '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows']
+        args: baseArgs.concat(args)
     });
+    // Most scenarios skip Chrome's autoplay rule for speed. Scenarios marked
+    // `realAutoplay: true` get a browser with the real rule (audio needs a gesture),
+    // which is what players' browsers do.
+    const browser = await launch(['--autoplay-policy=no-user-gesture-required']);
+    let strictBrowser = null;
 
     let failed = 0;
     for (const sc of list) {
-        const page = await browser.newPage();
+        if (sc.realAutoplay && !strictBrowser) strictBrowser = await launch([]);
+        const page = await (sc.realAutoplay ? strictBrowser : browser).newPage();
         const errors = [];
         page.on('pageerror', e => errors.push('pageerror: ' + e.message));
         page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -181,8 +188,11 @@ const scenarios = require('./scenarios');
         await Promise.race([page.close(), sleep(2000)]);
     }
     // browser.close() can hang on Windows; don't let it block the exit
-    await Promise.race([browser.close(), sleep(3000)]);
-    try { browser.process() && browser.process().kill(); } catch (_) { /* ignore */ }
+    for (const b of [browser, strictBrowser]) {
+        if (!b) continue;
+        await Promise.race([b.close(), sleep(3000)]);
+        try { b.process() && b.process().kill(); } catch (_) { /* ignore */ }
+    }
     server.close();
     console.log(failed ? '\n' + failed + ' FAILED' : '\nALL PASSED (' + list.length + ')');
     process.exit(failed ? 1 : 0);

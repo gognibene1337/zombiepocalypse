@@ -205,11 +205,56 @@ G.Audio = (function () {
         heal:   function () { [523, 659, 784].forEach(function (f, i) { A.tone(f, 0.08, 'triangle', 0.4, i * 0.06); }); },
         win:    function () { [523, 659, 784, 1047].forEach(function (f, i) { A.tone(f, 0.16, 'square', 0.35, i * 0.12); }); },
         lose:   function () { [392, 330, 262, 196].forEach(function (f, i) { A.tone(f, 0.22, 'triangle', 0.45, i * 0.15); }); },
+        chime:  function () { [784, 988, 1175, 1568].forEach(function (f, i) { A.tone(f, 0.12, 'triangle', 0.3, i * 0.07); }); },
+        buzz:   function () { A.tone(120, 0.25, 'square', 0.35); A.tone(90, 0.25, 'square', 0.25, 0.05); },
+        twang:  function () { A.tone(220, 0.12, 'triangle', 0.4); A.tone(330, 0.08, 'triangle', 0.2, 0.02); },
+        thud:   function () { A.tone(140, 0.08, 'sine', 0.5); },
+        pump:   function () { A.tone(620 + Math.random() * 120, 0.04, 'triangle', 0.22); },
+        meow:   function () {
+            const c = A.ctx;
+            if (!c || A.muted) return;
+            const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+            o.type = 'sawtooth';
+            o.frequency.setValueAtTime(650, t);
+            o.frequency.linearRampToValueAtTime(980, t + 0.09);
+            o.frequency.exponentialRampToValueAtTime(480, t + 0.38);
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.linearRampToValueAtTime(0.18, t + 0.04);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+            o.connect(g); g.connect(master);
+            o.start(t); o.stop(t + 0.42);
+        },
         // One pitch per dance direction
         left:   function () { A.tone(392, 0.09, 'square', 0.35); },
         down:   function () { A.tone(440, 0.09, 'square', 0.35); },
         up:     function () { A.tone(523, 0.09, 'square', 0.35); },
         right:  function () { A.tone(587, 0.09, 'square', 0.35); }
+    };
+
+    /*
+     * Say a short phrase with the browser's built-in voice (Web Speech API,
+     * works offline on Android Chrome). Falls back to a synthesized "nom nom".
+     * Respects mute. Speech doesn't go through Web Audio, so it isn't paused
+     * by ctx.suspend(); keep phrases short.
+     */
+    A.say = function (text, pitch) {
+        if (A.muted) return;
+        const S = window.speechSynthesis;
+        if (S && window.SpeechSynthesisUtterance) {
+            try {
+                S.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.pitch = pitch || 1.6;
+                u.rate = 1.15;
+                u.volume = 1;
+                S.speak(u);
+                return;
+            } catch (_) { /* fall through */ }
+        }
+        [0, 0.28].forEach(function (d) {                       // "nom nom"
+            A.tone(330, 0.16, 'triangle', 0.45, d);
+            A.tone(262, 0.12, 'triangle', 0.35, d + 0.08);
+        });
     };
 
     A.sfx = function (name) {

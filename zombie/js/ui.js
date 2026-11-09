@@ -10,7 +10,8 @@ G.UI = (function () {
         primary: { fill: '#c9302c', press: '#8f1f1c', text: '#fff' },
         secondary: { fill: '#2f3a2a', press: '#1d241a', text: C.text },
         danger: { fill: '#6b1f1f', press: '#4a1414', text: '#fff' },
-        good: { fill: '#2e6b3b', press: '#1f4d2a', text: '#fff' }
+        good: { fill: '#2e6b3b', press: '#1f4d2a', text: '#fff' },
+        xmas: { fill: '#a87a12', press: '#7a580c', text: '#fff' }
     };
 
     U.font = function (size, bold) {
@@ -110,18 +111,21 @@ G.UI = (function () {
         ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
         U.text(ctx, 'HP ' + Math.ceil(R.health), x + w + 8, y + h / 2 + 1, 12, C.text, 'left');
 
-        // Pause button (between HP and med-kits)
-        if (G.States.current && G.States.current.pausable) {
-            const pr = G.States.pauseRect();
-            ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillRect(pr.x + 6, pr.y + 5, pr.w - 12, pr.h - 10);
-            ctx.fillStyle = C.text;
-            ctx.fillRect(pr.x + 16, pr.y + 12, 4, 14);
-            ctx.fillRect(pr.x + 24, pr.y + 12, 4, 14);
-        }
+        U.drawPauseButton(ctx);   // between HP and med-kits
 
         G.Art.medkit(ctx, G.W - 64, 19, 9);
         U.text(ctx, '× ' + R.medkits, G.W - 50, 20, 14, C.text, 'left');
+    };
+
+    // ⏸ icon at G.States.pauseRect() (tap handling lives in the state manager)
+    U.drawPauseButton = function (ctx) {
+        if (!G.States.current || !G.States.current.pausable) return;
+        const pr = G.States.pauseRect();
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(pr.x + 6, pr.y + 5, pr.w - 12, pr.h - 10);
+        ctx.fillStyle = C.text;
+        ctx.fillRect(pr.x + 16, pr.y + 12, 4, 14);
+        ctx.fillRect(pr.x + 24, pr.y + 12, 4, 14);
     };
 
     // Is (x, y) on the HUD med-kit counter? (tap it to heal)

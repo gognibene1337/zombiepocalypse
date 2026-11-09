@@ -9,8 +9,8 @@ G.States.register('menu', {
     },
 
     layout: function () {
-        const bw = 220, bh = 56, x = (G.W - bw) / 2, y = Math.round(G.H * 0.54);
-        const y2 = y + bh + 12, y3 = y2 + 44 + 12;
+        const bw = 220, bh = 56, x = (G.W - bw) / 2, y = Math.round(G.H * 0.5);
+        const y2 = y + bh + 12, yb = y2 + 44 + 10, y3 = yb + 44 + 10;
         const dpadBtn = G.UI.button(this.dpadLabel(), x + 30, y3, bw - 60, 40, function () {
             G.Settings.dpad = !G.Settings.dpad;
             G.Settings.save();
@@ -26,9 +26,16 @@ G.States.register('menu', {
                 G.Run.reset();
                 G.States.go('rhythm');
             }, 'good'),
+            // Bonus games, side by side
+            G.UI.button('CAT PUMP', G.W / 2 - 130, yb, 124, 44, function () {
+                G.States.go('cat');
+            }, 'xmas'),
+            G.UI.button('FEAST FLING', G.W / 2 + 6, yb, 124, 44, function () {
+                G.States.go('feast');
+            }, 'xmas'),
             dpadBtn
         ];
-        this.hintY = y3 + 40 + 28;     // help text sits below the buttons
+        this.hintY = y3 + 40 + 24;     // help text sits below the buttons
         this.buildBackground();
     },
 
@@ -80,7 +87,7 @@ G.States.register('menu', {
         U.textShadow(ctx, 'ZOMBIEPOCALYPSE', cx, G.H * 0.12 + 64, 30, C.danger);
 
         const bob = Math.sin(G.time * 2) * 3;
-        G.Art.snakePortrait(ctx, cx, G.H * 0.36 + bob, Math.min(48, G.H * 0.07));
+        G.Art.snakePortrait(ctx, cx, G.H * 0.34 + bob, Math.min(44, G.H * 0.065));
 
         U.drawButtons(ctx, this.buttons, this.nav);
 
@@ -88,6 +95,6 @@ G.States.register('menu', {
         U.text(ctx, 'Swipe, d-pad or arrow keys to move', cx, hy, 13, C.dim, 'center', false);
         U.text(ctx, 'Escape the hedge maze.', cx, hy + 20, 13, C.dim, 'center', false);
         U.text(ctx, 'Out-dance the horde at the gate.', cx, hy + 40, 13, C.dim, 'center', false);
-        U.text(ctx, 'M = mute   F = debug', cx, Math.max(hy + 66, G.H * 0.9), 11, '#666', 'center', false);
+        U.text(ctx, 'M = mute   F = debug', cx, Math.max(hy + 62, G.H * 0.9), 11, '#666', 'center', false);
     }
 });
