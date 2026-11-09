@@ -14,6 +14,7 @@ window.addEventListener('resize', G.resize);
 window.addEventListener('orientationchange', G.resize);
 
 G.resize();
+G.Audio.loadTrack(G.TRACK.url);   // download now so it's ready by the dance-off
 G.Run.reset();
 G.States.go('menu', null, true);
 G.start();

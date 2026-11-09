@@ -43,6 +43,7 @@ async function startRhythm(h, notes, setup) {
         G.States.go('rhythm');
     }, notes, setup || '');
     await h.waitState('rhythm');
+    await h.page.waitForFunction(() => G.States.current.started, { timeout: 6000, polling: 50 });
 }
 
 // In-page autoplayer: dispatch key presses at each note's time (+offsetMs).
@@ -316,11 +317,62 @@ module.exports = [
             await startRhythm(h, 0, 'G.Run.health = 40;');
             const r = await h.ev(() => {
                 const s = G.States.current;
-                return { mul: s.tempoMul, spb: s.beats[0].spb };
+                return { mul: s.tempoMul, spb: s.beats[1].spb, rate: s.source && s.source.playbackRate.value };
             });
-            h.note('health 40 -> tempo x' + r.mul.toFixed(2) + ', beat ' + Math.round(r.spb * 1000) + 'ms');
-            assert(Math.abs(r.mul - 1.15) < 0.001, 'tempo +15% at 40 health');
-            assert(r.spb < 0.6, 'beats shorter than the 100bpm baseline');
+            h.note('health 40 -> tempo x' + r.mul.toFixed(2) + ', beat ' + Math.round(r.spb * 1000) + 'ms, playbackRate ' + r.rate);
+            assert(Math.abs(r.mul - 1.09) < 0.001, 'tempo +9% at 40 health');
+            assert(Math.abs(r.rate - r.mul) < 0.001, 'track playbackRate matches tempo');
+            assert(Math.abs(r.spb - 60 / 133.08 / 1.09) < 0.001, 'beat grid scaled by tempo');
+        }
+    },
+    {
+        name: 'rhythm-uses-track-left-right',
+        async run(h, assert) {
+            await startRhythm(h, 0);
+            const r = await h.ev(() => {
+                const s = G.States.current, T = G.TRACK, spb = 60 / T.bpm;
+                // Every note must sit exactly on a beat of the track's grid
+                const offGrid = s.notes.filter(n => {
+                    const k = (n.t * s.tempoMul - T.firstBeat) / spb;
+                    return Math.abs(k - Math.round(k)) > 1e-6;
+                }).length;
+                return {
+                    track: s.useTrack, state: G.Audio.trackState, n: s.notes.length,
+                    dirs: [...new Set(s.notes.map(n => n.dir))].sort().join(','),
+                    offGrid, playing: !!s.source, end: s.endT
+                };
+            });
+            h.note('track ' + r.state + ', ' + r.n + ' notes, dirs ' + r.dirs + ', song ' + r.end.toFixed(1) + 's');
+            assert(r.track && r.playing, 'recorded track is playing');
+            assert(r.dirs === 'left,right', 'only left/right notes');
+            assert(r.offGrid === 0, 'all notes on the beat grid');
+            await sleep(4500);
+            await h.shot('23-rhythm-track');
+        }
+    },
+    {
+        name: 'rhythm-ignores-up-down',
+        async run(h, assert) {
+            await startRhythm(h, 4);
+            const n0 = await h.ev(() => { const s = G.States.current; return (s.notes[0].t - s.now()) * 1000; });
+            await sleep(Math.max(0, n0 - 20));
+            await h.key('ArrowUp');
+            await h.key('ArrowDown');
+            await sleep(60);
+            const r = await h.ev(() => G.States.current.notes[0].result);
+            assert(r === null || r === 'miss', 'up/down swipes do not count as hits (got ' + r + ')');
+        }
+    },
+    {
+        name: 'rhythm-file-url-falls-back-to-synth',
+        file: true,
+        async run(h, assert) {
+            await startRhythm(h, 6);
+            const r = await h.ev(() => ({ track: G.States.current.useTrack, state: G.Audio.trackState }));
+            assert(!r.track && r.state === 'unavailable', 'file:// uses synth beat (state ' + r.state + ')');
+            await autoplay(h, 0);
+            await h.waitState('result', 20000);
+            assert((await resultInfo(h)).win, 'synth fallback is playable');
         }
     },
     {

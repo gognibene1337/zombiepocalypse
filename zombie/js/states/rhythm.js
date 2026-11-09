@@ -1,95 +1,147 @@
 'use strict';
 /*
- * Phase 2: The Zombie Gate Dance-Off (rhythm QTE)
+ * Phase 2: The Zombie Gate Dance-Off (rhythm QTE). Swipe LEFT / RIGHT on the beat.
+ *
+ * Music: the recorded track (G.TRACK, zombie/audio/dance.wav) when it loaded;
+ * otherwise a synthesized fallback beat (e.g. page opened from file://).
  *
  * Timing is driven by the AUDIO clock (AudioContext.currentTime), not frames,
  * so a slow phone dropping frames never drifts off the beat.
  *   songTime = ctx.currentTime - start - outputLatency
- * Music is synthesized and scheduled ~250ms ahead (lookahead scheduler).
  * Input events carry performance.now() stamps, converted to song time, so
- * judging is as precise as the touch event itself, not the frame it lands in.
+ * judging is as precise as the touch event, not the frame it lands in.
  *
- * Adaptive tempo (stretch goal): the lower Snake's health, the faster the
- * horde dances (up to +25% BPM). Tempo also ramps up section by section.
+ * Adaptive tempo (stretch goal): lower health = faster dance, up to +15%.
+ * With the recorded track that's playbackRate (pitch rises slightly too).
  * Med-kits carried from the maze each forgive one Miss (counted as Great).
  */
 G.States.register('rhythm', {
     pausable: true,
-    DIRS: ['left', 'down', 'up', 'right'],
-    COLORS: { left: '#d64ba0', down: '#4b9bd6', up: '#4bd67a', right: '#e0a040' },
+    DIRS: ['left', 'right'],                 // lanes, in screen order
+    COLORS: { left: '#d64ba0', right: '#e0a040' },
     PERFECT: 0.07,         // ± seconds
     GREAT: 0.14,           // ± seconds; later than this = Miss
     SPEED: 300,            // arrow scroll speed (units / s)
     PASS: 0.6,             // accuracy needed to pass
-    MAX_BPM: 150,
-    // Song shape: 4-beat count-in, then 4 sections of 8 beats, each faster
+    MAX_SPEEDUP: 0.15,     // tempo increase at (almost) zero health
+    LOAD_TIMEOUT: 4,       // seconds to wait for the track before using the synth beat
+    // Synth fallback: 4-beat count-in, then 4 sections of 8 beats, each faster
     SECTIONS: [
         { bpm: 100, every: 2 },
         { bpm: 110, every: 1 },
         { bpm: 120, every: 1 },
         { bpm: 132, every: 1 }
     ],
-    BASS: [110, 110, 87.31, 98],   // A2 A2 F2 G2, one per bar
+    BASS: [110, 110, 87.31, 98],   // A2 A2 F2 G2, one per bar (synth fallback)
     TEST_NOTES: 0,                 // tests can shorten the chart
 
     enter: function () {
         const R = G.Run;
         R.rhythmAttempts++;
-        this.tempoMul = 1 + (1 - R.health / R.maxHealth) * 0.25;
-        this.buildChart();
+        this.tempoMul = 1 + (1 - R.health / R.maxHealth) * this.MAX_SPEEDUP;
 
         this.stats = { perfect: 0, great: 0, miss: 0, saved: 0 };
         this.combo = 0;
         this.maxCombo = 0;
         this.judge = null;            // { text, color, t }
-        this.flash = { left: 0, down: 0, up: 0, right: 0 };
+        this.flash = { left: 0, right: 0 };
         this.horde = 0;               // how far the horde has advanced (misses)
         this.first = 0;               // index of first note still worth checking
-
-        G.Audio.unlock();
-        const ctx = G.Audio.ctx;
-        this.useAudio = !!(ctx && ctx.state === 'running');
-        this.lat = this.useAudio ? (ctx.outputLatency || ctx.baseLatency || 0) : 0;
-        this.start = this.rawNow() + 0.4;
-        this.nextBeat = 0;
-        this.songT = -0.4;
         this.finished = false;
+        this.started = false;
+        this.waitT = 0;
+        this.source = null;
+        this.songT = -1;
+        this.notes = [];
+        this.beats = [];
+        G.Audio.unlock();
+    },
+
+    exit: function () {
+        G.Audio.stopTrack(this.source);
+        this.source = null;
     },
 
     layout: function () {
         this.recY = G.UI.HUD_H + 150;          // receptor row
-        this.laneX = [];
-        for (let i = 0; i < 4; i++) this.laneX.push(G.W / 2 + (i - 1.5) * 76);
+        this.laneX = [G.W / 2 - 80, G.W / 2 + 80];
     },
 
-    buildChart: function () {
-        const rnd = G.rng((G.Run.seed ^ 0x5bd1e995) >>> 0);
-        const beats = [], notes = [];
-        let t = 0, bpm = Math.min(this.MAX_BPM, this.SECTIONS[0].bpm * this.tempoMul);
+    // Begin the song once the track is ready (or we've given up waiting for it)
+    startSong: function () {
+        const A = G.Audio, ctx = A.ctx;
+        this.useAudio = !!(ctx && ctx.state === 'running');
+        this.useTrack = this.useAudio && A.trackState === 'ready';
+        this.lat = this.useAudio ? (ctx.outputLatency || ctx.baseLatency || 0) : 0;
+        if (this.useTrack) this.buildTrackChart();
+        else this.buildSynthChart();
+
+        this.start = this.rawNow() + 0.3;
+        if (this.useTrack) this.source = A.playTrack(this.start, this.tempoMul);
+        this.nextBeat = 0;
+        this.started = true;
+    },
+
+    pickDirs: function (count, seed) {
+        const rnd = G.rng(seed >>> 0), out = [];
+        let p1 = null, p2 = null;
+        for (let i = 0; i < count; i++) {
+            let d;
+            do { d = this.DIRS[(rnd() * 2) | 0]; } while (d === p1 && d === p2); // no triples
+            p2 = p1; p1 = d;
+            out.push(d);
+        }
+        return out;
+    },
+
+    // Chart from the recorded track's beat grid
+    buildTrackChart: function () {
+        const T = G.TRACK, rate = this.tempoMul, spb = 60 / T.bpm;
+        const beats = [], beatIdx = [];
+        for (let k = 0; T.firstBeat + k * spb < T.duration; k++) {
+            beats.push({ t: (T.firstBeat + k * spb) / rate, spb: spb / rate });
+        }
+        for (let k = T.countInBeat + 4; k <= T.lastNoteBeat && k < beats.length; k++) {
+            if (k >= T.denseFromBeat || (k - T.countInBeat) % 2 === 0) beatIdx.push(k);
+        }
+        const dirs = this.pickDirs(beatIdx.length, G.Run.seed ^ 0x5bd1e995);
+        let notes = beatIdx.map(function (k, i) { return { t: beats[k].t, dir: dirs[i], judged: false, result: null }; });
+        if (this.TEST_NOTES) notes = notes.slice(0, this.TEST_NOTES);
+
+        this.beats = beats;
+        this.notes = notes;
+        this.countT = [0, 1, 2, 3].map(function (i) { return beats[T.countInBeat + i].t; });
+        this.endT = Math.min(notes[notes.length - 1].t + 1.0, T.duration / rate);
+    },
+
+    // Synthesized fallback chart + beat
+    buildSynthChart: function () {
+        const beats = [], noteTimes = [];
+        let t = 0, bpm = this.SECTIONS[0].bpm * this.tempoMul;
         for (let i = 0; i < 4; i++) {                       // count-in
             beats.push({ t: t, spb: 60 / bpm, count: 4 - i, bar: 0 });
             t += 60 / bpm;
         }
-        let p1 = null, p2 = null, beatNo = 0;
+        let beatNo = 0;
         for (let s = 0; s < this.SECTIONS.length; s++) {
             const sec = this.SECTIONS[s];
-            bpm = Math.min(this.MAX_BPM, sec.bpm * this.tempoMul);
+            bpm = sec.bpm * this.tempoMul;
             const spb = 60 / bpm;
             for (let b = 0; b < 8; b++, beatNo++) {
                 beats.push({ t: t, spb: spb, count: 0, bar: beatNo >> 2, down: b % 4 === 0 });
-                if (b % sec.every === 0) {
-                    let d;
-                    do { d = this.DIRS[(rnd() * 4) | 0]; } while (d === p1 && d === p2); // no triples
-                    p2 = p1; p1 = d;
-                    notes.push({ t: t, dir: d, judged: false, result: null });
-                }
+                if (b % sec.every === 0) noteTimes.push(t);
                 t += spb;
             }
         }
         beats.push({ t: t, spb: 60 / bpm, count: 0, bar: beatNo >> 2, down: true, last: true });
+        const dirs = this.pickDirs(noteTimes.length, G.Run.seed ^ 0x5bd1e995);
+        let notes = noteTimes.map(function (nt, i) { return { t: nt, dir: dirs[i], judged: false, result: null }; });
+        if (this.TEST_NOTES) notes = notes.slice(0, this.TEST_NOTES);
+
         this.beats = beats;
-        this.notes = this.TEST_NOTES ? notes.slice(0, this.TEST_NOTES) : notes;
-        this.endT = this.notes[this.notes.length - 1].t + 1.0;
+        this.notes = notes;
+        this.countT = [beats[0].t, beats[1].t, beats[2].t, beats[3].t];
+        this.endT = notes[notes.length - 1].t + 1.0;
     },
 
     rawNow: function () {
@@ -101,7 +153,7 @@ G.States.register('rhythm', {
         return this.rawNow() - this.start - this.lat;
     },
 
-    scheduleBeat: function (b) {
+    scheduleSynthBeat: function (b) {
         const A = G.Audio, at = this.start + b.t;
         if (b.count) {                          // count-in clicks
             A.toneAt(b.count === 4 ? 1320 : 990, 0.05, 'square', 0.3, at);
@@ -159,7 +211,7 @@ G.States.register('rhythm', {
         this.combo = 0;
         this.horde = Math.min(10, this.horde + 1);
         this.setJudge(label || 'MISS', G.C.danger);
-        G.Audio.sfx('growl');
+        if (!this.useTrack) G.Audio.sfx('growl');   // keep the recorded music clean
         G.vibrate(60);
     },
 
@@ -175,24 +227,30 @@ G.States.register('rhythm', {
     // ------------------------------------------------------------ update
     update: function (dt) {
         if (this.finished) return;
+
+        if (!this.started) {
+            // Wait briefly for the track to finish downloading/decoding
+            const st = G.Audio.trackState;
+            this.waitT += dt;
+            const pending = st === 'loading' || st === 'fetched' || st === 'decoding';
+            if (!pending || this.waitT >= this.LOAD_TIMEOUT) this.startSong();
+            else return;
+        }
+
         const now = this.songT = this.now();
 
-        if (this.useAudio) {
+        if (this.useAudio && !this.useTrack) {
             while (this.nextBeat < this.beats.length && this.beats[this.nextBeat].t < now + this.lat + 0.25) {
-                this.scheduleBeat(this.beats[this.nextBeat++]);
+                this.scheduleSynthBeat(this.beats[this.nextBeat++]);
             }
         }
 
         const ev = G.Input.events, pnow = performance.now();
         for (let i = 0; i < ev.length; i++) {
             const e = ev[i];
-            if (e.type === 'dir') {
+            if (e.type === 'dir' && (e.dir === 'left' || e.dir === 'right')) {
                 this.flash[e.dir] = 1;
                 this.hit(e.dir, now - (pnow - e.t) / 1000);
-            } else if (e.type === 'back') {
-                G.States.go('menu');
-                this.finished = true;
-                return;
             }
         }
 
@@ -206,10 +264,8 @@ G.States.register('rhythm', {
         while (this.first < notes.length && notes[this.first].judged &&
                now - notes[this.first].t > 1.5) this.first++;
 
-        for (let i = 0; i < 4; i++) {
-            const d = this.DIRS[i];
-            if (this.flash[d] > 0) this.flash[d] = Math.max(0, this.flash[d] - dt * 5);
-        }
+        if (this.flash.left > 0) this.flash.left = Math.max(0, this.flash.left - dt * 5);
+        if (this.flash.right > 0) this.flash.right = Math.max(0, this.flash.right - dt * 5);
         if (this.judge && (this.judge.t -= dt) <= 0) this.judge = null;
 
         if (now >= this.endT) {
@@ -237,11 +293,18 @@ G.States.register('rhythm', {
     },
 
     render: function (ctx) {
-        const U = G.UI, C = G.C, cx = G.W / 2, t = this.songT;
-        const pulse = this.beatPulse();
+        const U = G.UI, C = G.C, cx = G.W / 2;
 
         ctx.fillStyle = '#150f1e';
         ctx.fillRect(0, 0, G.W, G.H);
+
+        if (!this.started) {
+            U.text(ctx, 'Loading music...', cx, G.H * 0.5, 16, C.dim, 'center', false);
+            U.drawHUD(ctx);
+            return;
+        }
+
+        const t = this.songT, pulse = this.beatPulse();
 
         // Horde: dances on the beat, creeps forward on every miss
         const hy = U.HUD_H + 36 + this.horde * 4;
@@ -252,13 +315,13 @@ G.States.register('rhythm', {
         }
 
         // Lanes
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
-        for (let i = 0; i < 4; i++) ctx.fillRect(this.laneX[i] - 32, this.recY - 40, 64, G.H);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        for (let i = 0; i < 2; i++) ctx.fillRect(this.laneX[i] - 40, this.recY - 44, 80, G.H);
 
         // Receptors (pulse on beat, light up on input)
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 2; i++) {
             const d = this.DIRS[i], f = this.flash[d];
-            G.Art.arrow(ctx, this.laneX[i], this.recY, 26 + pulse * 3, d,
+            G.Art.arrow(ctx, this.laneX[i], this.recY, 30 + pulse * 4, d,
                 f > 0 ? this.COLORS[d] : '#2c2540', f > 0 ? '#fff' : '#6a6090');
         }
 
@@ -269,19 +332,23 @@ G.States.register('rhythm', {
             const y = this.recY + (n.t - t) * this.SPEED;
             if (y > G.H + 30) break;
             if (n.result === 'perfect' || n.result === 'great' || n.result === 'saved') continue;
-            if (y < U.HUD_H - 30) continue;
-            const lane = this.DIRS.indexOf(n.dir);
-            G.Art.arrow(ctx, this.laneX[lane], y, 24, n.dir,
+            const past = this.recY - y;                    // > 0 once it passed the target
+            if (past > 70) continue;                        // gone before reaching the horde
+            const lane = n.dir === 'left' ? 0 : 1;
+            if (past > 0) ctx.globalAlpha = 1 - past / 70;
+            G.Art.arrow(ctx, this.laneX[lane], y, 28, n.dir,
                 n.result === 'miss' ? '#444' : this.COLORS[n.dir], 'rgba(0,0,0,0.5)');
+            ctx.globalAlpha = 1;
         }
 
         // Count-in
-        if (t < this.beats[4].t) {
+        if (t < this.countT[3] + 0.4) {
             let label = 'READY';
             for (let i = 3; i >= 0; i--) {
-                if (t >= this.beats[i].t) { label = i === 3 ? 'DANCE!' : String(3 - i); break; }
+                if (t >= this.countT[i]) { label = i === 3 ? 'DANCE!' : String(3 - i); break; }
             }
-            U.textShadow(ctx, label, cx, G.H * 0.55, 48, C.accent);
+            U.textShadow(ctx, label, cx, G.H * 0.52, 48, C.accent);
+            U.text(ctx, 'Swipe LEFT / RIGHT on the beat', cx, G.H * 0.52 + 40, 14, C.text, 'center', false);
         }
 
         // Judgement + combo

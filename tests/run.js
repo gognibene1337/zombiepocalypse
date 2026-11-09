@@ -20,7 +20,28 @@ const CHROME = [
     path.join(process.env.LOCALAPPDATA || '', 'Google/Chrome/Application/chrome.exe')
 ].find(p => p && fs.existsSync(p));
 
-const URL = 'file:///' + path.resolve(__dirname, '../zombie/index.html').replace(/\\/g, '/') + '?seed=12345';
+// Pages are served over a tiny local HTTP server (fetch() of the music track
+// doesn't work from file://). Scenarios with `file: true` use file:// instead.
+const http = require('http');
+const ROOT = path.resolve(__dirname, '..');
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.wav': 'audio/wav', '.json': 'application/json', '.png': 'image/png' };
+const FILE_URL = 'file:///' + path.join(ROOT, 'zombie/index.html').replace(/\\/g, '/') + '?seed=12345';
+let URL = null; // set once the server is listening
+
+function startServer() {
+    const server = http.createServer((req, res) => {
+        const p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
+        if (!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) {
+            res.writeHead(404); res.end(); return;
+        }
+        res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream' });
+        fs.createReadStream(p).pipe(res);
+    });
+    return new Promise(r => server.listen(0, '127.0.0.1', () => {
+        URL = 'http://127.0.0.1:' + server.address().port + '/zombie/index.html?seed=12345';
+        r(server);
+    }));
+}
 const SHOTS = path.join(__dirname, 'shots');
 const CPU_THROTTLE = 4;
 
@@ -115,6 +136,7 @@ const scenarios = require('./scenarios');
 (async () => {
     if (!CHROME) { console.error('Chrome not found. Set CHROME_PATH.'); process.exit(2); }
     fs.mkdirSync(SHOTS, { recursive: true });
+    const server = await startServer();
 
     const filter = process.argv[2] || '';
     const list = scenarios.filter(s => s.name.includes(filter));
@@ -142,7 +164,7 @@ const scenarios = require('./scenarios');
         const t0 = Date.now();
         const notes = [];
         try {
-            await page.goto(URL, { waitUntil: 'load' });
+            await page.goto(sc.file ? FILE_URL : URL, { waitUntil: 'load' });
             await page.waitForFunction(() => window.G && G.States && G.States.name === 'menu', { timeout: 5000 });
             const h = makeHelpers(page);
             h.note = s => notes.push(s);
@@ -161,6 +183,7 @@ const scenarios = require('./scenarios');
     // browser.close() can hang on Windows; don't let it block the exit
     await Promise.race([browser.close(), sleep(3000)]);
     try { browser.process() && browser.process().kill(); } catch (_) { /* ignore */ }
+    server.close();
     console.log(failed ? '\n' + failed + ' FAILED' : '\nALL PASSED (' + list.length + ')');
     process.exit(failed ? 1 : 0);
 })();

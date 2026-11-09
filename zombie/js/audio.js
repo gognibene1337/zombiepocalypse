@@ -20,6 +20,55 @@ G.Audio = (function () {
             A.master = master;
         }
         if (A.ctx.state === 'suspended') A.ctx.resume();
+        decodePending();
+    };
+
+    // ---- Music track (recorded WAV) ----
+    // States: idle -> loading -> fetched -> decoding -> ready | failed | unavailable
+    // Fetch starts at boot; decoding waits for the AudioContext (first user gesture).
+    A.trackState = 'idle';
+    A.trackBuffer = null;
+    let trackRaw = null;
+
+    A.loadTrack = function (url) {
+        if (location.protocol === 'file:') {     // Chrome blocks fetch() from file:// pages
+            A.trackState = 'unavailable';
+            return;
+        }
+        A.trackState = 'loading';
+        fetch(url)
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+            .then(function (ab) { trackRaw = ab; A.trackState = 'fetched'; decodePending(); })
+            .catch(function () { A.trackState = 'failed'; });
+    };
+
+    function decodePending() {
+        if (!A.ctx || !trackRaw || A.trackState !== 'fetched') return;
+        const ab = trackRaw;
+        trackRaw = null;                          // let the compressed copy be GC'd
+        A.trackState = 'decoding';
+        A.ctx.decodeAudioData(ab)
+            .then(function (buf) { A.trackBuffer = buf; A.trackState = 'ready'; })
+            .catch(function () { A.trackState = 'failed'; });
+    }
+
+    // Start the track at absolute context time `at`. rate > 1 = faster (and higher pitch).
+    A.playTrack = function (at, rate, vol) {
+        if (!A.ctx || !A.trackBuffer) return null;
+        const s = A.ctx.createBufferSource(), g = A.ctx.createGain();
+        s.buffer = A.trackBuffer;
+        s.playbackRate.value = rate || 1;
+        g.gain.value = vol == null ? 1.6 : vol;  // master is 0.25; the track is pre-mixed
+        s.connect(g);
+        g.connect(master);
+        s.start(at);
+        return s;
+    };
+
+    A.stopTrack = function (s) {
+        if (!s) return;
+        try { s.stop(); } catch (_) { /* already stopped */ }
+        try { s.disconnect(); } catch (_) { /* ignore */ }
     };
 
     A.suspend = function () { if (A.ctx && A.ctx.state === 'running') A.ctx.suspend(); };
