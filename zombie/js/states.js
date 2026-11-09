@@ -38,6 +38,9 @@ G.States = (function () {
         fadeDir = 1;
     };
 
+    // True while a fade transition is running (used by tests)
+    S.busy = function () { return fadeDir !== 0; };
+
     S.update = function (dt) {
         if (fadeDir === 1) {                  // fading out: freeze the old state
             fade += dt / FADE;
